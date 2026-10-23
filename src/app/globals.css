@@ -1,0 +1,149 @@
+@import 'tailwindcss';
+
+:root {
+  color-scheme: light;
+  --color-bg: radial-gradient(1200px 800px at 20% -10%, #f8fafc 0%, #f1f5f9 55%, #e7ecf6 100%);
+  --color-surface: rgba(255, 255, 255, 0.78);
+  --color-panel: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 250, 252, 0.82) 100%);
+  --color-panel-2: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(241, 245, 249, 0.9) 100%);
+  --color-panel-glass: radial-gradient(600px 200px at top, rgba(99, 102, 241, 0.08), transparent);
+  --color-ink: #0f1026;
+  --color-ink-dim: #1f2937;
+  --color-ink-faint: #475569;
+  --color-line: rgba(99, 102, 241, 0.14);
+  --color-line-strong: rgba(79, 70, 229, 0.28);
+  --color-accent: #4f46e5;
+  --color-accent-foreground: #f8f9ff;
+  --color-accent-glow: rgba(99, 102, 241, 0.35);
+  --color-success: #22c55e;
+  --color-warn: #f59e0b;
+  --color-danger: #ef4444;
+  --color-info: #38bdf8;
+  --color-highlight: radial-gradient(400px 120px at top, rgba(99, 102, 241, 0.16), transparent);
+  --shadow-soft: 0 40px 80px -60px rgba(79, 70, 229, 0.9);
+  --shadow-panel: 0 60px 120px -80px rgba(15, 23, 42, 0.9);
+  --blur-panel: blur(18px) saturate(120%);
+}
+
+:root.dark {
+  color-scheme: dark;
+  --color-bg: radial-gradient(1400px 900px at 15% -20%, rgba(99, 102, 241, 0.18) 0%, rgba(14, 16, 36, 1) 55%, rgba(9, 10, 24, 1) 100%);
+  --color-surface: rgba(17, 19, 40, 0.7);
+  --color-panel: radial-gradient(900px 260px at top, rgba(129, 140, 248, 0.12), transparent), linear-gradient(180deg, rgba(25, 28, 58, 0.92) 0%, rgba(16, 18, 38, 0.88) 100%);
+  --color-panel-2: radial-gradient(700px 220px at top, rgba(99, 102, 241, 0.16), transparent), linear-gradient(180deg, rgba(31, 34, 72, 0.96) 0%, rgba(17, 19, 40, 0.9) 100%);
+  --color-panel-glass: radial-gradient(600px 200px at top, rgba(129, 140, 248, 0.18), transparent);
+  --color-ink: #f8fafc;
+  --color-ink-dim: #e2e8f0;
+  --color-ink-faint: #94a3b8;
+  --color-line: rgba(129, 140, 248, 0.22);
+  --color-line-strong: rgba(165, 180, 252, 0.38);
+  --color-accent: #a5b4fc;
+  --color-accent-foreground: #0f1026;
+  --color-accent-glow: rgba(165, 180, 252, 0.4);
+  --color-success: #34d399;
+  --color-warn: #fbbf24;
+  --color-danger: #f87171;
+  --color-info: #38bdf8;
+  --color-highlight: radial-gradient(420px 140px at top, rgba(165, 180, 252, 0.22), transparent);
+  --shadow-soft: 0 50px 100px -70px rgba(129, 140, 248, 0.45);
+  --shadow-panel: 0 80px 140px -90px rgba(99, 102, 241, 0.4);
+  --blur-panel: blur(22px) saturate(130%);
+}
+
+* {
+  border-color: var(--color-line);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-feature-settings: 'ss01' on, 'ss03' on, 'cv02' on, 'cv11' on;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--color-accent) 35%, transparent);
+  color: var(--color-ink);
+}
+
+.scroll-y {
+  scrollbar-gutter: stable;
+}
+
+.scroll-y::-webkit-scrollbar {
+  width: 8px;
+}
+
+.scroll-y::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scroll-y::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--color-accent) 40%, transparent) 0%, transparent 100%);
+  border-radius: 999px;
+}
+
+.focus-ring {
+  outline: none;
+}
+
+.focus-ring:focus-visible {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-accent) 60%, transparent), 0 0 0 4px color-mix(in oklab, var(--color-accent) 18%, transparent);
+}
+
+.surface-glass {
+  background: var(--color-panel);
+  backdrop-filter: var(--blur-panel);
+  -webkit-backdrop-filter: var(--blur-panel);
+  box-shadow: var(--shadow-panel);
+  position: relative;
+}
+
+.surface-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--color-panel-glass);
+  pointer-events: none;
+}
+
+.surface-glass > * {
+  position: relative;
+  z-index: 1;
+}
+
+.surface-card {
+  background: var(--color-surface);
+  backdrop-filter: blur(16px) saturate(118%);
+  -webkit-backdrop-filter: blur(16px) saturate(118%);
+  box-shadow: var(--shadow-soft);
+  position: relative;
+}
+
+.surface-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--color-highlight);
+  pointer-events: none;
+}
+
+.surface-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.shimmer {
+  background: linear-gradient(90deg, transparent 0%, color-mix(in oklab, var(--color-accent) 14%, transparent) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2.4s ease-in-out infinite;
+}
