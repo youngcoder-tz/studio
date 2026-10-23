@@ -241,13 +241,23 @@ export interface ComponentManifest {
   modes: WorkspaceMode[];
   capabilities: string[];
   supportedSpans: number[];
-  preferredSpan: number | null;
+  /** Responsive column hint. Objects are the wire truth (`{mobile, tablet, desktop}`); flat numbers come from older clients. */
+  preferredSpan: { mobile: number; tablet: number; desktop: number } | number | null;
   defaultProps: Record<string, unknown>;
   fields: ManifestField[];
   dataBinding: { endpoints: string[]; bindableProps: string[] } | null;
   actions: { key: string; label: string; dangerous?: boolean }[];
   slots: ManifestSlot[];
   compatibility: { runtimeRange: string; schemaVersion: string };
+}
+
+/** The column span a manifest prefers on desktop, for badges and inspectors. */
+export function desktopSpan(
+  component: Pick<ComponentManifest, 'preferredSpan'> | null | undefined,
+): number | null {
+  const span = component?.preferredSpan;
+  if (span == null) return null;
+  return typeof span === 'object' ? (span.desktop ?? null) : span;
 }
 
 export interface PageDefinition {

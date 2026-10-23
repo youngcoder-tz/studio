@@ -15,7 +15,7 @@
 
 import { Search, Plus, CornerDownLeft } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import type { ComponentManifest } from '@/lib/contract';
+import { desktopSpan, type ComponentManifest } from '@/lib/contract';
 import { cn, titleCase, truncate } from '@/lib/utils';
 import { TextInput } from '@/components/ui/input';
 import { Badge, EmptyState } from '@/components/ui/primitives';
@@ -118,8 +118,8 @@ export function Palette({
                           <span className="truncate text-xs font-medium">
                             {component.name}
                           </span>
-                          {component.preferredSpan ? (
-                            <Badge>{component.preferredSpan}/12</Badge>
+                          {desktopSpan(component) != null ? (
+                            <Badge>{desktopSpan(component)}/12</Badge>
                           ) : null}
                         </span>
                         {component.description ? (

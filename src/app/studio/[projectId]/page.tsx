@@ -23,7 +23,7 @@
 // and the editor store (local + server). There is no third source of state, which
 // is what stops the UI quietly disagreeing with the document.
 
-import { use, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { use, useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Activity,
@@ -36,7 +36,6 @@ import {
   FileText,
   Focus,
   Keyboard,
-  Layers,
   LayoutTemplate,
   Loader2,
   Monitor,
@@ -75,7 +74,7 @@ import {
 } from '@/lib/preview';
 import { cn } from '@/lib/utils';
 import { isTypingTarget } from '@/lib/shortcuts';
-import { useTheme } from '@/lib/theme';
+import { useTheme } from '@/components/theme/theme-provider';
 import { Palette } from '@/components/palette/palette';
 import { LayerList } from '@/components/layers/layer-list';
 import { Inspector } from '@/components/inspector/inspector';
@@ -413,6 +412,18 @@ function StudioWorkspace({
 
   // Command palette inventory. Built fresh on state that its items read; the
   // palette itself filters, so a generous list is cheap.
+  const handlePublish = useCallback(() => {
+    void publish
+      .mutateAsync(undefined)
+      .then(() => {
+        setPreviewMode('live');
+        void editor.reload();
+      })
+      .catch(() => {
+        /* toast already shown by the hook */
+      });
+  }, [publish, editor]);
+
   const commandItems = useMemo<CommandItem[]>(() => {
     const items: CommandItem[] = [];
     const activePageKey = editor.state.activePageKey;
@@ -502,7 +513,10 @@ function StudioWorkspace({
       },
       {
         id: 'theme',
-        label: theme.theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme',
+        label:
+          theme.resolvedTheme === 'dark'
+            ? 'Switch to light theme'
+            : 'Switch to dark theme',
         group: 'Preview',
         icon: <Settings2 size={13} />,
         keywords: 'dark light appearance',
@@ -643,24 +657,13 @@ function StudioWorkspace({
     pageKeys,
     instanceCounts,
     manifest.components,
-    theme.theme,
+    theme.resolvedTheme,
     theme.toggle,
     focusMode,
+    handlePublish,
   ]);
 
   const previewPath = previewPathFor(editor.state.activePageKey);
-
-  const handlePublish = () => {
-    void publish
-      .mutateAsync(undefined)
-      .then(() => {
-        setPreviewMode('live');
-        void editor.reload();
-      })
-      .catch(() => {
-        /* toast already shown by the hook */
-      });
-  };
 
   const handleDiscard = () => {
     void discard

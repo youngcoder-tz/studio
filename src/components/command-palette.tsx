@@ -26,6 +26,10 @@ export function CommandPalette({
 }) {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
+  // Reset-on-change, done as a render-time adjustment (the React-recommended
+  // escape from setState-in-effect cascades): compare against the values the
+  // last render saw and reset the row-selection/query synchronously.
+  const [last, setLast] = useState({ open, query });
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -49,17 +53,22 @@ export function CommandPalette({
     return Array.from(map.entries());
   }, [filtered]);
 
+  if (open !== last.open || query !== last.query) {
+    const opened = open !== last.open ? open : undefined;
+    setLast({ open, query });
+    if (opened === true) {
+      setQuery('');
+      setActive(0);
+    } else if (opened === undefined && query !== last.query) {
+      setActive(0);
+    }
+  }
+
   useEffect(() => {
     if (!open) return;
-    setQuery('');
-    setActive(0);
     const id = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(id);
   }, [open]);
-
-  useEffect(() => {
-    setActive(0);
-  }, [query]);
 
   useEffect(() => {
     const node = listRef.current?.querySelector(`[data-index="${active}"]`);

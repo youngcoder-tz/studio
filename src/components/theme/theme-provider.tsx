@@ -8,6 +8,8 @@ type ThemeContextValue = {
   theme: Theme;
   resolvedTheme: 'light' | 'dark';
   setTheme: (theme: Theme) => void;
+  /** Flips between light and dark, resolving `system` first. */
+  toggle: () => void;
 };
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
@@ -54,6 +56,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       theme,
       resolvedTheme,
       setTheme: (next: Theme) => setThemeState(next),
+      // Convenience for the editor command palette, which speaks in
+      // "flip it" terms. `system` resolves through `resolvedTheme` so the
+      // first flip lands against the theme the user is actually seeing.
+      toggle: () => setThemeState(resolvedTheme === 'dark' ? 'light' : 'dark'),
     }),
     [theme, resolvedTheme],
   );

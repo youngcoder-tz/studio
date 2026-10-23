@@ -101,10 +101,15 @@ export function useGallery(projectId: string, category: string | undefined, enab
 }
 
 export function useProjects() {
+  // Gated on the viewer query: the launcher mounts both at once, and firing
+  // `/projects` before an access token exists just poisons the query with a
+  // 401 that would otherwise need manual refetching after sign-in.
+  const viewer = useViewer();
   return useQuery({
     queryKey: ['projects'],
     queryFn: fetchProjects,
     retry: false,
+    enabled: viewer.isSuccess,
   });
 }
 
