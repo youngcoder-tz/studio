@@ -71,6 +71,18 @@ function onRefreshed(ok: boolean) {
   refreshSubscribers = [];
 }
 
+/**
+ * Trade the dashboard's root-domain session cookies for a Studio bearer token.
+ *
+ * The console and the Studio are separate deployments, but the API writes its
+ * `accessToken`/`refreshToken` cookies to the shared root domain, so a signed-in
+ * dashboard session is already proof of identity — it just has to be asked.
+ * Callers use this before concluding anybody is anonymous.
+ */
+export function refreshSessionFromCookie(): Promise<boolean> {
+  return refreshAccessToken();
+}
+
 async function refreshAccessToken(): Promise<boolean> {
   if (isRefreshing) {
     return new Promise((resolve) => refreshSubscribers.push(resolve));
@@ -168,18 +180,23 @@ export async function apiRequest<T>(
   if (!response.ok) {
     const raw = json as {
       message?: string | string[];
-      error?: { message?: string } | string;
+      error?: { message?: string; code?: string } | string;
       code?: string;
       diagnostics?: unknown;
     };
+    // The auth service nests its machine-readable code inside `error`, while
+    // workspace endpoints put it at the top level — read whichever the
+    // endpoint used so callers can classify the failure.
+    const nested = typeof raw?.error === 'object' ? raw.error : undefined;
     const errorMsg =
       raw?.message ||
-      (typeof raw?.error === 'object' ? raw.error?.message : raw?.error) ||
+      nested?.message ||
+      raw?.error ||
       `Request failed with status ${response.status}`;
     throw new ApiError(
       Array.isArray(errorMsg) ? errorMsg.join(', ') : String(errorMsg),
       response.status,
-      raw?.code,
+      raw?.code ?? nested?.code,
       raw?.diagnostics,
     );
   }

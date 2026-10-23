@@ -17,9 +17,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRight,
   Boxes,
+  Info,
+  KeyRound,
   Loader2,
   LogOut,
-  ShieldAlert,
+  Mail,
   Sparkles,
   TriangleAlert,
 } from 'lucide-react';
@@ -28,10 +30,19 @@ import {
   useViewer,
 } from '@/lib/api/hooks';
 import type { StudioProject } from '@/lib/api/projects';
-import { http, setAccessToken } from '@/lib/api/client';
+import { http, setAccessToken, API_BASE_URL } from '@/lib/api/client';
+import { isForbidden, isUnsignedIn } from '@/lib/errors';
 import { Badge, EmptyState } from '@/components/ui/primitives';
 import { Button } from '@/components/ui/button';
-import { TextInput } from '@/components/ui/input';
+import {
+  AuthAlert,
+  classifyAuthError,
+  type AuthAlertContent,
+} from '@/components/auth/auth-alert';
+import {
+  AuthPasswordField,
+  AuthTextField,
+} from '@/components/auth/auth-field';
 import {
   WORKSPACE_MODE_LABELS,
   type WorkspaceMode,
@@ -93,14 +104,39 @@ export default function LauncherPage() {
         {viewer.isPending ? (
           <div className="flex items-center justify-center gap-2 py-20 text-[var(--color-ink-faint)]">
             <Loader2 size={16} className="animate-spin" />
-            <span className="text-xs">Checking session…</span>
+            <span className="text-xs">Checking your dashboard session…</span>
           </div>
         ) : viewer.isError ? (
-          <SignInPrompt
-            onSignedIn={() => {
-              void viewer.refetch();
-            }}
-          />
+          isUnsignedIn(viewer.error) ? (
+            <SignInPrompt
+              onSignedIn={() => {
+                void viewer.refetch();
+              }}
+            />
+          ) : (
+            <SessionProblem
+              content={
+                isForbidden(viewer.error)
+                  ? {
+                      kind: 'notice',
+                      title: 'Signed in, but not allowed here',
+                      description:
+                        'This account is signed in but is not allowed to open the Studio.',
+                    }
+                  : classifyAuthError(
+                      viewer.error,
+                      'The workspace API could not be reached.',
+                    )
+              }
+              onRetry={() => {
+                void viewer.refetch();
+              }}
+              onSignIn={() => {
+                setAccessToken(null);
+                void viewer.refetch();
+              }}
+            />
+          )
         ) : (
           <ProjectList
             projects={projects.data}
@@ -119,48 +155,73 @@ export default function LauncherPage() {
 function SignInPrompt({ onSignedIn }: { onSignedIn: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{
+    email?: string;
+    password?: string;
+  }>({});
+  const [alert, setAlert] = useState<AuthAlertContent | null>(null);
 
   const submit = async () => {
+    const errors: { email?: string; password?: string } = {};
+    if (!email.trim()) errors.email = 'Enter the email you sign in with.';
+    else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim()))
+      errors.email = 'That does not look like an email address.';
+    if (!password) errors.password = 'Enter your password.';
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
     setBusy(true);
-    setError(null);
+    setAlert(null);
     try {
-      const result = (await http.post('/auth/login', { email, password })) as {
+      const result = (await http.post('/auth/login', {
+        email: email.trim(),
+        password,
+        remember,
+      })) as {
         status?: string;
         accessToken?: string;
         message?: string;
       };
       if (result.status === 'mfa_required') {
-        setError(
-          'This account has multi-factor auth. The Studio does not handle MFA challenges — sign in through the dashboard and let the shared cookie carry the session.',
-        );
+        setAlert({
+          kind: 'notice',
+          title: 'This account uses two-factor authentication',
+          description:
+            'The Studio does not answer MFA challenges. Sign in through the dashboard and come back — the shared session cookie will already be here.',
+        });
         return;
       }
       if (result.status === 'password_reset_required') {
-        setError(
-          'This account must reset its password before it can be used here. Reset it in the dashboard, then sign in again.',
-        );
+        setAlert({
+          kind: 'notice',
+          title: 'This account must set a new password first',
+          description:
+            'Reset it in the dashboard, then sign in again with the new password.',
+        });
         return;
       }
       if (!result.accessToken) {
-        setError(result.message ?? 'Sign-in returned no session token.');
+        setAlert({
+          kind: 'generic',
+          title: 'Sign-in returned no session token',
+          description: result.message,
+        });
         return;
       }
       setAccessToken(result.accessToken);
       onSignedIn();
     } catch (caught) {
-      setError(
-        caught instanceof Error ? caught.message : 'Sign-in failed. Try again.',
-      );
+      setAlert(classifyAuthError(caught));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="glass mx-auto w-full max-w-sm space-y-5 rounded-2xl p-6">
-      <div className="space-y-1.5">
+    <div className="glass mx-auto w-full max-w-sm space-y-5 rounded-2xl p-6 px-5 sm:px-6">
+      <div className="space-y-1.5 border-b border-[var(--color-line)] pb-3">
         <h1 className="text-lg font-semibold tracking-tight">Sign in to continue</h1>
         <p className="text-xs leading-relaxed text-[var(--color-ink-dim)]">
           The Studio needs a dashboard identity — the same account that sees the
@@ -171,40 +232,114 @@ function SignInPrompt({ onSignedIn }: { onSignedIn: () => void }) {
       </div>
 
       <form
-        className="space-y-3"
+        className="space-y-4"
+        noValidate
         onSubmit={(event) => {
           event.preventDefault();
           void submit();
         }}
       >
-        <TextInput
+        <AuthTextField
+          id="studio-email"
+          label="Email"
+          icon={<Mail size={15} />}
           type="email"
           required
           value={email}
-          onChange={(event) => setEmail(event.target.value)}
+          onChange={(event) => {
+            setEmail(event.target.value);
+            if (fieldErrors.email) setFieldErrors((e) => ({ ...e, email: undefined }));
+          }}
           placeholder="you@organisation.dev"
           autoComplete="email"
+          disabled={busy}
+          error={fieldErrors.email}
         />
-        <TextInput
-          type="password"
+
+        <AuthPasswordField
+          id="studio-password"
+          label="Password"
+          icon={<KeyRound size={15} />}
           required
           value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          placeholder="Password"
+          onChange={(event) => {
+            setPassword(event.target.value);
+            if (fieldErrors.password)
+              setFieldErrors((e) => ({ ...e, password: undefined }));
+          }}
+          placeholder="Enter your password"
           autoComplete="current-password"
+          disabled={busy}
+          error={fieldErrors.password}
         />
-        <Button type="submit" variant="primary" className="w-full" disabled={busy}>
+
+        <label className="flex cursor-pointer items-center gap-2 pl-1 text-[11px] text-[var(--color-ink-dim)]">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(event) => setRemember(event.target.checked)}
+            disabled={busy}
+            className="h-3.5 w-3.5 rounded accent-[var(--color-accent)]"
+          />
+          Keep me signed in on this device
+        </label>
+
+        <AuthAlert content={alert} />
+
+        <Button
+          type="submit"
+          variant="primary"
+          className="h-10 w-full rounded-full font-semibold"
+          disabled={busy}
+        >
           {busy ? <Loader2 size={14} className="animate-spin" /> : null}
-          Sign in
+          {busy ? 'Signing in…' : 'Sign in'}
         </Button>
       </form>
 
-      {error ? (
-        <div className="flex items-start gap-2 rounded-lg border border-[var(--color-warn)]/30 bg-[var(--color-warn)]/10 p-2.5">
-          <ShieldAlert size={14} className="mt-0.5 shrink-0 text-[var(--color-warn)]" />
-          <p className="text-[10px] leading-relaxed text-[var(--color-ink-dim)]">{error}</p>
-        </div>
-      ) : null}
+      <div className="flex items-start gap-2.5 rounded-2xl bg-[color-mix(in_oklab,var(--color-ink-faint)_12%,transparent)] px-4 py-3 text-[11px] leading-relaxed text-[var(--color-ink-dim)]">
+        <Info size={13} className="mt-0.5 shrink-0 opacity-70" />
+        <span>
+          Already signed in to the dashboard on this machine? The Studio reads
+          that session from the shared root domain — reload this page and it
+          should be here without a password.
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── When a session exists elsewhere, or the API is simply not answering ─────
+
+function SessionProblem({
+  content,
+  onRetry,
+  onSignIn,
+}: {
+  content: AuthAlertContent;
+  onRetry: () => void;
+  onSignIn: () => void;
+}) {
+  return (
+    <div className="glass mx-auto w-full max-w-sm space-y-4 rounded-2xl p-6">
+      <div className="space-y-1.5">
+        <h1 className="text-lg font-semibold tracking-tight">No session to read</h1>
+      </div>
+      <AuthAlert content={content} />
+      <p className="text-[11px] leading-relaxed text-[var(--color-ink-faint)]">
+        The Studio has no accounts of its own. It signs in through the dashboard
+        session the API writes to the shared root domain, so opening{' '}
+        <span className="font-mono text-[10px]">{API_BASE_URL}</span> and signing
+        in there is enough — this page picks it up on the next check.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="secondary" size="sm" onClick={onRetry}>
+          Check again
+        </Button>
+        <Button variant="ghost" size="sm" onClick={onSignIn}>
+          Sign in with a password instead
+        </Button>
+      </div>
     </div>
   );
 }

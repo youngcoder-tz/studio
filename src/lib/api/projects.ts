@@ -1,6 +1,7 @@
 // studio/src/lib/api/projects.ts
 
-import { http } from './client';
+import { http, refreshSessionFromCookie } from './client';
+import { isUnsignedIn } from '../errors';
 import type { WorkspaceMode } from '../contract';
 
 /**
@@ -37,6 +38,20 @@ export interface ViewerIdentity {
   [key: string]: unknown;
 }
 
-export function fetchViewer(): Promise<ViewerIdentity> {
-  return http.get<ViewerIdentity>('/auth/session');
+/**
+ * The current dashboard identity, used to scope the launcher.
+ *
+ * Order of precedence: a Studio bearer token already in this tab, then the
+ * session cookies the dashboard wrote to the shared root domain, then — if that
+ * access cookie has aged out — one silent trade of the refresh cookie for a new
+ * token. Only when all three come back empty is anybody actually signed out.
+ */
+export async function fetchViewer(): Promise<ViewerIdentity> {
+  try {
+    return await http.get<ViewerIdentity>('/auth/session');
+  } catch (error) {
+    if (!isUnsignedIn(error)) throw error;
+    if (!(await refreshSessionFromCookie())) throw error;
+    return http.get<ViewerIdentity>('/auth/session');
+  }
 }

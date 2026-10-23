@@ -34,13 +34,14 @@ import { AnimatePresence, motion } from "framer-motion";
 import { TriangleAlert } from "lucide-react";
 
 import { useGallery, useManifest, useWorkspaceDocument } from "@/lib/api/hooks";
+import { refreshSessionFromCookie } from "@/lib/api/client";
 import {
   fetchDocument,
   publishWorkspace,
   replaceDocument,
   selectTemplate,
 } from "@/lib/api/workspace";
-import { ApiError } from "@/lib/errors";
+import { ApiError, isUnsignedIn } from "@/lib/errors";
 import type {
   GalleryTemplate,
   GlobalTokens,
@@ -123,9 +124,20 @@ export default function WorkspaceSetupPage({
     return () => window.clearTimeout(timer);
   }, [minFloorElapsed]);
 
-  // Error handling: queries can fail (auth, permissions).
+  // Error handling: queries can fail because there is no session, because this
+  // identity may not see the project, or because the API is not answering.
   if (manifest.isError || documentQuery.isError) {
     const error = (manifest.error ?? documentQuery.error) as Error;
+    const unsignedIn = isUnsignedIn(manifest.error) || isUnsignedIn(documentQuery.error);
+
+    const retrySession = async () => {
+      // A dashboard session on the shared root domain is enough — trade the
+      // refresh cookie for a token and re-run the two reads that failed.
+      if (await refreshSessionFromCookie()) {
+        await Promise.all([manifest.refetch(), documentQuery.refetch()]);
+      }
+    };
+
     return (
       <main className="relative min-h-screen">
         <div className="flex items-center justify-center px-6 py-24">
@@ -135,23 +147,33 @@ export default function WorkspaceSetupPage({
               className="mx-auto text-[var(--color-warn)]"
             />
             <div className="space-y-1">
-              <h1 className="text-base font-semibold">Could not open setup</h1>
+              <h1 className="text-base font-semibold">
+                {unsignedIn ? "This workspace needs a session" : "Could not open setup"}
+              </h1>
               <p className="text-xs leading-relaxed text-[var(--color-ink-faint)]">
-                {error?.message ?? "Unknown error."}
+                {unsignedIn
+                  ? "The Studio signs in through the dashboard session the API writes to the shared root domain. Nothing you answered is lost — the wizard reads its progress back out of your draft."
+                  : (error?.message ?? "Unknown error.")}
               </p>
             </div>
             <button
               type="button"
-              onClick={() => window.location.reload()}
+              onClick={() => {
+                if (unsignedIn) {
+                  void retrySession();
+                  return;
+                }
+                window.location.reload();
+              }}
               className="focus-ring rounded-full bg-[var(--color-accent)] px-4 py-2 text-xs font-medium text-[var(--color-accent-foreground)]"
             >
-              Try again
+              {unsignedIn ? "Use my dashboard session" : "Try again"}
             </button>
             <Link
               href="/studio"
               className="block text-[11px] text-[var(--color-ink-faint)] underline-offset-2 hover:underline"
             >
-              Back to projects
+              {unsignedIn ? "Sign in on the launcher instead" : "Back to projects"}
             </Link>
           </Panel>
         </div>

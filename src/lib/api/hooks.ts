@@ -26,6 +26,16 @@ import {
   selectTemplate,
 } from './workspace';
 import { fetchProjects, fetchViewer } from './projects';
+import { isUnsignedIn } from '../errors';
+
+/**
+ * A missing session does not fix itself between retries — the client already
+ * traded the root-domain refresh cookie for a token on the first 401. Keep
+ * retrying genuine blips, fail instantly on an absent session, and let the UI
+ * say what is actually wrong.
+ */
+const retryUnlessSignedOut = (failureCount: number, error: unknown): boolean =>
+  !isUnsignedIn(error) && failureCount < 3;
 
 export const workspaceKeys = {
   all: (projectId: string) => ['workspace', projectId] as const,
@@ -46,6 +56,7 @@ export function useManifest(projectId: string) {
   return useQuery({
     queryKey: workspaceKeys.manifest(projectId),
     queryFn: () => fetchManifest(projectId),
+    retry: retryUnlessSignedOut,
     // Manifests are code-owned and only change on deploy, so they are the one
     // thing worth caching aggressively within a session.
     staleTime: 10 * 60_000,
@@ -56,6 +67,7 @@ export function useWorkspaceDocument(projectId: string, enabled = true) {
   return useQuery({
     queryKey: workspaceKeys.document(projectId),
     queryFn: () => fetchDocument(projectId),
+    retry: retryUnlessSignedOut,
     enabled,
   });
 }
@@ -96,6 +108,7 @@ export function useGallery(projectId: string, category: string | undefined, enab
   return useQuery({
     queryKey: workspaceKeys.gallery(projectId, category),
     queryFn: () => fetchGallery(projectId, category),
+    retry: retryUnlessSignedOut,
     enabled,
   });
 }

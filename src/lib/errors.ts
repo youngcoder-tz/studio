@@ -26,3 +26,16 @@ export class ApiError extends Error {
     return this.status === 401 || this.status === 403;
   }
 }
+
+/**
+ * "There is no session" and "the API could not be reached" are different
+ * problems, and the launcher must not offer a password form for the second one.
+ */
+export function isUnsignedIn(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401;
+}
+
+/** Signed in, but this identity may not see this workspace. */
+export function isForbidden(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 403;
+}
