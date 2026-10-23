@@ -29,6 +29,7 @@ import {
   Sparkles,
   Undo2,
   UploadCloud,
+  Wand2,
   X,
 } from 'lucide-react';
 import { cn, relativeTime } from '@/lib/utils';
@@ -51,6 +52,7 @@ export function Toolbar({
   onSave,
   onReload,
   onOpenGallery,
+  onOpenSetup,
   onOpenHistory,
   onOpenTokens,
   onPublish,
@@ -73,6 +75,7 @@ export function Toolbar({
   onSave: () => void;
   onReload: () => void;
   onOpenGallery: () => void;
+  onOpenSetup: () => void;
   onOpenHistory: () => void;
   onOpenTokens: () => void;
   onPublish: () => void;
@@ -116,6 +119,10 @@ export function Toolbar({
         <Button variant="secondary" size="sm" onClick={onOpenGallery}>
           <Sparkles size={14} />
           Gallery
+        </Button>
+        <Button variant="ghost" size="sm" onClick={onOpenSetup}>
+          <Wand2 size={14} />
+          Setup
         </Button>
         <Button variant="ghost" size="sm" onClick={onOpenHistory}>
           <History size={14} />

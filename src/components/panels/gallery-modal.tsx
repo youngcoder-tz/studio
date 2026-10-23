@@ -116,7 +116,14 @@ export function GalleryModal({
                       'surface-2 relative flex flex-col gap-3 overflow-hidden rounded-xl p-3.5',
                       isCurrent && 'border-[var(--color-accent)]/50',
                     )}
-                    style={accent ? { borderLeft: `2px solid ${accent}` } : undefined}
+                    style={
+                      accent
+                        ? {
+                            borderLeft: `2px solid ${accent.primary}`,
+                            backgroundImage: `linear-gradient(135deg, ${accent.surface}22, transparent 55%)`,
+                          }
+                        : undefined
+                    }
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 space-y-0.5">

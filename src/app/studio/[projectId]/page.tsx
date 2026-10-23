@@ -24,6 +24,7 @@
 // is what stops the UI quietly disagreeing with the document.
 
 import { use, useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   Activity,
@@ -115,12 +116,35 @@ export default function StudioPage({
 
   const manifest = useManifest(projectId);
   const document = useWorkspaceDocument(projectId);
+  const router = useRouter();
+
+  // First-run commissioning only happens on an untouched seed (revision 1 is
+  // the template seed; a draft above 1 means somebody has already authored in
+  // this workspace). Skip is remembered per session *and* persisted as a draft
+  // edit, so it does not reappear on every navigation.
+  useEffect(() => {
+    if (!document.data) return;
+    if (document.data.liveRevision > 1 || document.data.draftRevision > 1) return;
+    if (sessionStorage.getItem(`workspace-setup-complete:${projectId}`)) return;
+    router.replace(`/studio/${projectId}/setup`);
+  }, [document.data, projectId, router]);
+
+  const needsSetup =
+    Boolean(document.data) &&
+    document.data!.liveRevision <= 1 &&
+    document.data!.draftRevision <= 1 &&
+    typeof window !== 'undefined' &&
+    !sessionStorage.getItem(`workspace-setup-complete:${projectId}`);
 
   const defaultPageKey =
     manifest.data?.defaultPageKey ?? DEFAULT_PAGE_KEY_FALLBACK;
 
-  if (manifest.isPending || document.isPending) {
-    return <FullPageLoader label="Loading the workspace…" />;
+  if (manifest.isPending || document.isPending || needsSetup) {
+    return (
+      <FullPageLoader
+        label={needsSetup ? 'Opening workspace setup…' : 'Loading the workspace…'}
+      />
+    );
   }
 
   if (manifest.isError || document.isError) {
@@ -185,6 +209,7 @@ function StudioWorkspace({
   templateId: string;
 }) {
   const editor = useEditor();
+  const router = useRouter();
   const [leftTab, setLeftTab] = useState<LeftTab>('layers');
   const [rightTab, setRightTab] = useState<RightTab>('inspector');
   const [rightOpen, setRightOpen] = useState(true);
@@ -688,6 +713,7 @@ function StudioWorkspace({
         onSave={() => void editor.saveNow()}
         onReload={() => void editor.reload()}
         onOpenGallery={() => setGalleryOpen(true)}
+        onOpenSetup={() => router.push(`/studio/${projectId}/setup`)}
         onOpenHistory={() => {
           setRightTab('history');
           setRightOpen(true);

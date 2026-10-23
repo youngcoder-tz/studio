@@ -105,6 +105,7 @@ export const CANONICAL_TOKEN_KINDS: Record<string, TokenKind> = {
   direction: 'direction',
   siteName: 'text',
   tagline: 'text',
+  logoUrl: 'url',
   ogImage: 'url',
   locale: 'locale',
   currency: 'currency',
@@ -140,7 +141,7 @@ export const TOKEN_GROUPS: { label: string; keys: string[] }[] = [
   },
   {
     label: 'Identity & locale',
-    keys: ['siteName', 'tagline', 'ogImage', 'theme', 'direction', 'locale', 'currency'],
+    keys: ['siteName', 'tagline', 'logoUrl', 'ogImage', 'theme', 'direction', 'locale', 'currency'],
   },
 ];
 
@@ -273,12 +274,18 @@ export interface DataSourceDefinition {
   responseKey: string;
 }
 
+export interface TemplateAccent {
+  primary: string;
+  secondary: string;
+  surface: string;
+}
+
 export interface BuiltinTemplateRef {
   key: string;
   displayName: string;
   description: string;
   tags: string[];
-  accent: string;
+  accent: TemplateAccent;
 }
 
 export interface StudioManifest {
@@ -371,7 +378,7 @@ export interface GalleryTemplate {
   category: WorkspaceMode;
   description?: string;
   tags?: string[];
-  accent?: string | null;
+  accent?: TemplateAccent | null;
   authorName?: string;
   price?: number;
   rating?: number;
