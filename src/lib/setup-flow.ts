@@ -18,7 +18,7 @@ import type { GlobalTokens, TemplateAccent, WorkspaceMode } from './contract';
 // ─── Icon vocabulary ─────────────────────────────────────────────────────────
 //
 // Icon *names*, not components, so this module stays side-effect free. The
-// wizard maps names to lucide components in one place (MODE_ICONS).
+// wizard maps names to lucide components in one place (icon-bridge).
 
 export type FlowIcon =
   | 'graduation'
@@ -52,7 +52,31 @@ export type FlowIcon =
   | 'hand-coins'
   | 'hand-heart'
   | 'dove'
-  | 'building';
+  | 'building'
+  // Setup-step vocabulary
+  | 'cap'
+  | 'palette'
+  | 'layers'
+  | 'slides'
+  | 'images'
+  | 'award'
+  | 'calendar'
+  | 'identity'
+  | 'scroll'
+  | 'compass'
+  | 'badge-check'
+  | 'contrast'
+  | 'sliders'
+  | 'repeat'
+  | 'type';
+
+// ─── Splash signature ────────────────────────────────────────────────────────
+//
+// Each workspace mode is a different product with a different name, and the
+// warm-up is where that is first felt. The motif picks the animation, so
+// EduOS never plays NGO OS's heartbeat.
+
+export type SplashMotif = 'campus' | 'pulse' | 'ledger' | 'network' | 'constellation';
 
 // ─── Shared field shape ──────────────────────────────────────────────────────
 
@@ -89,6 +113,8 @@ export interface FlowTrack {
   features?: FlowFeature[];
   /** Extra operational fields only this track asks for. */
   fields?: FlowField[];
+  /** Template keys worth putting in front of the slideshow for this track. */
+  templateKeys?: string[];
 }
 
 export interface FlowFeature {
@@ -96,6 +122,49 @@ export interface FlowFeature {
   label: string;
   description: string;
   icon: FlowIcon;
+}
+
+// ─── Origin (the "what actually is this" gate) ───────────────────────────────
+//
+// A workspace mode is not one operation. An Education project can be a
+// registered school, an online academy, or a learning programme run by an NGO
+// that has no campus, no fee ledger and no national results slip. Asking that
+// question *before* the track card is what lets the rest of the wizard change
+// its shape: different tracks, different evidence, different pages.
+
+export interface FlowOriginOption {
+  id: string;
+  label: string;
+  description: string;
+  icon: FlowIcon;
+  accent: { primary: string; secondary: string };
+  /** Track ids offered next. Omitted means "offer the mode's whole shelf". */
+  tracks?: string[];
+  /** Evidence this origin must collect. Only present, the credentials card shows. */
+  fields?: FlowField[];
+  credentialsTitle?: string;
+  credentialsHint?: string;
+  /** Tiles this origin normally wants on; pre-toggled for the client. */
+  recommends?: string[];
+  /** Template keys shown first in the showcase. */
+  templateKeys?: string[];
+  /** The shelf question, re-worded for this origin. */
+  trackTitle?: string;
+  trackDescription?: string;
+  /** The details question, re-worded for this origin. */
+  operationalTitle?: string;
+  /** Replaces the mode's default operational fields when set. */
+  operationalFields?: FlowField[];
+  /** Example answers, so the identity card stops asking in the abstract. */
+  examples?: { name: string; tagline: string };
+}
+
+export interface FlowOrigin {
+  title: string;
+  description: string;
+  /** Shown when a client picks an origin whose tracks are not the mode default. */
+  note?: string;
+  options: FlowOriginOption[];
 }
 
 // ─── Style preset ────────────────────────────────────────────────────────────
@@ -114,12 +183,17 @@ export interface ModeFlow {
   key: WorkspaceMode;
   /** Splash + hero icon/palette for this mode. */
   icon: FlowIcon;
+  /** The product this mode *is*, in its own words. EduOS, NGO OS, … */
+  osName: string;
+  splashMotif: SplashMotif;
   accent: { primary: string; secondary: string; surface: string };
   /** Splash script: short lines the loader narrates while it warms up. */
   splashLines: string[];
   /** Hero copy on card 1. */
   brandTitle: string;
   brandTagline: string;
+  /** The "what actually is this" gate. Absent = go straight to the shelf. */
+  origin?: FlowOrigin;
   /** The "what kind of X" question. */
   trackTitle: string;
   trackDescription: string;
@@ -127,20 +201,25 @@ export interface ModeFlow {
   /** Label for the children refinement card (e.g. "Levels served"). */
   childFieldLabel?: string;
   childFieldHint?: string;
-  /** Define 2–3 levels of child keys per selected track (empty = skip card). */
-  childrenCatalog?: Record<string, { value: string; label: string; description?: string }[]>;
+  /** Lookup table for a track's `children` keys: value → label + description. */
+  childrenCatalog?: Record<string, { value: string; label: string; description?: string }>;
   /** Operational questions, in presentation order. */
   operationalTitle: string;
   operationalFields: FlowField[];
   /** Feature card settings */
   featuresTitle?: string;
   featuresHint?: string;
+  /** Template showcase settings */
+  templateTitle?: string;
+  templateHint?: string;
   /** Style card settings */
   presets: FlowPreset[];
   paletteTitle: string;
   paletteHint: string;
   /** Pages the runtime will mount for this mode (displayed at review). */
   runtimeSurfaces: string[];
+  /** This mode's own step spine, in order, with the words it uses for each. */
+  spine: { id: StepId; label: string; icon: FlowIcon }[];
 }
 
 // ─── Shared helpers ──────────────────────────────────────────────────────────
@@ -216,6 +295,23 @@ function pickFeature(pool: FlowFeature[], keys: string[]): FlowFeature[] {
     .filter((f): f is FlowFeature => Boolean(f));
 }
 
+/**
+ * Tiles for a track, by key.
+ *
+ * `pickFeature` drops unknown keys quietly, which once left the e-learning
+ * track rendering four blank tiles. The mismatch is a data bug, so it is said
+ * out loud in development instead of being visible only to a client.
+ */
+function tiles(pool: FlowFeature[], keys: string[]): FlowFeature[] {
+  const picked = pickFeature(pool, keys);
+  if (process.env.NODE_ENV !== 'production' && picked.length !== keys.length) {
+    const known = new Set(picked.map((feature) => feature.key));
+    const missing = keys.filter((key) => !known.has(key));
+    console.warn(`[setup-flow] unknown feature key(s): ${missing.join(', ')}`);
+  }
+  return picked;
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // EDUCATION
 // ═════════════════════════════════════════════════════════════════════════════
@@ -226,8 +322,17 @@ const EDU_LEVELS = [
   { value: 'upper-primary', label: 'Upper primary', description: 'Grades 4–6' },
   { value: 'junior-secondary', label: 'Junior secondary', description: 'Grades 7–9' },
   { value: 'senior-secondary', label: 'Senior secondary', description: 'Grades 10–12' },
+  { value: 'sixth-form', label: 'Sixth form', description: 'A-Levels & IB DP' },
+  { value: 'tvet', label: 'TVET / trades', description: 'Certificates & diplomas' },
   { value: 'tertiary', label: 'Tertiary', description: 'Diploma & degree' },
+  { value: 'undergraduate', label: 'Undergraduate', description: "Bachelor's degree" },
+  { value: 'postgraduate', label: 'Postgraduate', description: "Master's & PG diplomas" },
+  { value: 'doctoral', label: 'Doctoral & research', description: 'PhD, fellowships' },
+  { value: 'professional', label: 'Professional / CPD', description: 'Practising adults' },
+  { value: 'adult', label: 'Adult & community', description: 'Lifelong learning' },
 ];
+
+const EDU_LEVEL_VALUES = EDU_LEVELS.map((level) => level.value);
 
 const EDU_CERT_FIELDS: FlowField[] = [
   {
@@ -236,6 +341,30 @@ const EDU_CERT_FIELDS: FlowField[] = [
     type: 'text',
     placeholder: 'Certificate of Completion',
   },
+];
+
+const EDU_ONLINE_FIELDS: FlowField[] = [
+  {
+    key: 'learningModel',
+    label: 'How the learning is delivered',
+    type: 'select',
+    options: [
+      { value: 'self-paced', label: 'Self-paced library' },
+      { value: 'cohort', label: 'Cohorts on a calendar' },
+      { value: 'hybrid', label: 'Hybrid — library plus live' },
+      { value: '1:1', label: 'One-to-one tutoring' },
+    ],
+  },
+  {
+    key: 'cohortSize',
+    label: 'Typical cohort size',
+    type: 'select',
+    options: ['10', '25', '50', '100', 'open'].map((v) => ({
+      value: v,
+      label: v === 'open' ? 'Open enrolment' : `Up to ${v} learners`,
+    })),
+  },
+  ...EDU_CERT_FIELDS,
 ];
 
 const EDU_TIMETABLE_FIELDS: FlowField[] = [
@@ -269,53 +398,303 @@ const EDU_HOSTEL_FIELDS: FlowField[] = [
   },
 ];
 
+/**
+ * The evidence a registered institution is asked for. These are presentation
+ * tokens — they render on the admissions and about pages — never a verification
+ * claim: the Studio cannot confirm a registration number and does not pretend
+ * to, so the copy says "as printed on your certificate".
+ */
+const EDU_INSTITUTION_FIELDS: FlowField[] = [
+  {
+    key: 'institutionType',
+    label: 'What the register calls you',
+    type: 'select',
+    options: [
+      { value: 'public', label: 'Public / government' },
+      { value: 'private', label: 'Private' },
+      { value: 'faith', label: 'Faith-based' },
+      { value: 'aided', label: 'Government-aided' },
+    ],
+  },
+  {
+    key: 'registrationAuthority',
+    label: 'Registering or accrediting body',
+    type: 'select',
+    options: [
+      { value: 'ministry', label: 'Ministry / department of education' },
+      { value: 'county', label: 'County or state board' },
+      { value: 'national', label: 'National accreditor' },
+      { value: 'international', label: 'International body (CIS, WASC, IB)' },
+      { value: 'other', label: 'Something else' },
+    ],
+  },
+  {
+    key: 'registrationNumber',
+    label: 'Registration / code number',
+    type: 'text',
+    hint: 'Exactly as printed on your certificate. Shown on admissions pages only.',
+    placeholder: 'e.g. 215/10/401',
+  },
+  {
+    key: 'foundedYear',
+    label: 'Year founded',
+    type: 'text',
+    placeholder: '1984',
+    maxLength: 4,
+  },
+  {
+    key: 'campusSetting',
+    label: 'Campus',
+    type: 'select',
+    options: [
+      { value: 'urban', label: 'Urban' },
+      { value: 'suburban', label: 'Suburban' },
+      { value: 'rural', label: 'Rural' },
+      { value: 'multi', label: 'Multi-campus' },
+    ],
+  },
+];
+
+/** The lighter evidence a learning programme run by someone else carries. */
+const EDU_PROGRAMME_FIELDS: FlowField[] = [
+  {
+    key: 'hostOrganisation',
+    label: 'Who runs this programme',
+    type: 'text',
+    placeholder: 'Coastal Health Trust',
+  },
+  {
+    key: 'audienceFocus',
+    label: 'Who it is for',
+    type: 'select',
+    options: [
+      { value: 'youth', label: 'Out-of-school youth' },
+      { value: 'practitioners', label: 'Practitioners & teachers' },
+      { value: 'community', label: 'The wider community' },
+      { value: 'staff', label: 'Our own staff' },
+    ],
+  },
+  {
+    key: 'fundingModel',
+    label: 'Who pays',
+    type: 'select',
+    options: [
+      { value: 'sponsored', label: 'Fully sponsored' },
+      { value: 'subsidised', label: 'Subsidised / sliding scale' },
+      { value: 'self-pay', label: 'Learners pay' },
+      { value: 'employer', label: 'Employer-funded' },
+    ],
+  },
+  ...EDU_CERT_FIELDS,
+];
+
 const EDU_FEATURES: FlowFeature[] = [
   { key: 'resultsOnline', label: 'Online results', description: 'Students view grades the day they publish.', icon: 'monitor' },
   { key: 'feeStatements', label: 'Fee statements', description: 'Per-term invoices with instalments.', icon: 'hand-coins' },
-  { key: 'timetable', label: 'Timetables', description: 'Class and room schedules, calendar feeds.', icon: 'book-open' },
+  { key: 'timetable', label: 'Timetables', description: 'Class and room schedules, calendar feeds.', icon: 'calendar' },
   { key: 'staffDirectory', label: 'Staff directory', description: 'Protected profiles with roles and rooms.', icon: 'users' },
   { key: 'admissions', label: 'Admissions portal', description: 'Public steps plus enquiry routes.', icon: 'school' },
   { key: 'library', label: 'Library card', description: 'Catalogue plus borrowed-item renewals.', icon: 'library' },
   { key: 'transport', label: 'Transport', description: 'Routes, stops, driver contacts.', icon: 'bus' },
   { key: 'meals', label: 'Meals menu', description: 'Weekly menu and dietary flags.', icon: 'utensils' },
+  { key: 'certificates', label: 'Certificates', description: 'Signed, verifiable completion slips.', icon: 'award' },
+  { key: 'liveTutoring', label: 'Live classes', description: 'Streaming sessions with replay.', icon: 'slides' },
+  { key: 'progressTracking', label: 'Progress tracking', description: 'Per-learner pace, streaks and gaps.', icon: 'target' },
+  { key: 'cohorts', label: 'Cohorts', description: 'Date-driven groups with shared milestones.', icon: 'users' },
+  { key: 'courseCatalog', label: 'Course catalogue', description: 'Subjects, levels and what each one covers.', icon: 'layers' },
+  { key: 'assessments', label: 'Assessments', description: 'Quizzes with instant, explain-the-answer feedback.', icon: 'badge-check' },
+  { key: 'enrolment', label: 'Online enrolment', description: 'Self-serve sign-up with a seat count.', icon: 'compass' },
+  { key: 'payments', label: 'Course payments', description: 'Per-course or per-cohort invoicing.', icon: 'hand-coins' },
 ];
+
 
 export const EDUCATION_FLOW: ModeFlow = {
   key: 'EDUCATION',
   icon: 'graduation',
+  osName: 'EduOS',
+  splashMotif: 'campus',
   accent: { primary: '#4f46e5', secondary: '#22d3ee', surface: '#eef2ff' },
   splashLines: [
-    'Mapping campus surfaces',
-    'Dressing EduOS contract pages',
-    'Wiring results & fees safely',
+    'Opening the EduOS shelf',
+    'Mapping campus and cohort surfaces',
+    'Dressing results, fees and timetables',
     'Launching your studio',
   ],
   brandTitle: 'Welcome to EduOS',
-  brandTagline: 'gives your school a living portal — results, fees and timetables stay wired to the systems that already run them.',
+  brandTagline:
+    'gives a school, an academy or a learning programme a living portal — results, fees and timetables stay wired to the systems that already run them.',
+  origin: {
+    title: 'Before we ask about levels — what is this, exactly?',
+    description:
+      'EduOS runs three different operations. This choice decides which questions follow, which evidence we ask for and which pages get dressed.',
+    note: 'Nothing here locks you in — it changes the order we ask, not what you can turn on later.',
+    options: [
+      {
+        id: 'institution',
+        label: 'A registered school or college',
+        description:
+          'On the government or accreditor register, with a campus, a term calendar and published results.',
+        icon: 'school',
+        accent: { primary: '#1e3a8a', secondary: '#f59e0b' },
+        trackTitle: 'What kind of institution is it?',
+        trackDescription:
+          'The phase decides which levels, houses and reporting pages EduOS dresses first.',
+        tracks: [
+          'primary',
+          'secondary',
+          'k12',
+          'boarding',
+          'international',
+          'madrasah',
+          'higher-ed',
+          'vocational',
+          'special-needs',
+        ],
+        fields: EDU_INSTITUTION_FIELDS,
+        credentialsTitle: 'The details a registered institution publishes',
+        credentialsHint:
+          'These land on your admissions and about pages as ordinary text. EduOS displays them; it never verifies them.',
+        recommends: ['resultsOnline', 'feeStatements', 'timetable', 'admissions'],
+        templateKeys: ['edu-campus', 'edu-heritage', 'edu-global'],
+        examples: {
+          name: 'Riverside Academy',
+          tagline: 'Learning with purpose, leading with care.',
+        },
+      },
+      {
+        id: 'online',
+        label: 'An online academy',
+        description:
+          'Courses, cohorts and certificates. No campus roll, no fee ledger, no national results slip.',
+        icon: 'monitor',
+        accent: { primary: '#4f46e5', secondary: '#22d3ee' },
+        trackTitle: 'What kind of academy is it?',
+        trackDescription:
+          'The delivery shape decides which learner surfaces appear — catalogue, cohort calendar or tutoring.',
+        tracks: [
+          'course-library',
+          'cohort-academy',
+          'exam-prep',
+          'tutoring',
+          'corporate-training',
+          'micro-credentials',
+        ],
+        fields: EDU_ONLINE_FIELDS,
+        credentialsTitle: 'How the academy runs',
+        credentialsHint:
+          'Delivery model and cohort size tune the learner pages. Certificate title prints on the completion slip.',
+        recommends: ['certificates', 'progressTracking', 'cohorts', 'courseCatalog'],
+        templateKeys: ['edu-elearning', 'edu-vibrant', 'edu-campus'],
+        operationalTitle: 'How the academy runs',
+        operationalFields: [
+          {
+            key: 'admissionsEmail',
+            label: 'Learner support email',
+            type: 'email',
+            placeholder: 'help@academy.example',
+          },
+          {
+            key: 'teachingTimezone',
+            label: 'Live classes run in',
+            type: 'select',
+            options: [
+              { value: 'utc', label: 'UTC' },
+              { value: 'eAT', label: 'East Africa (UTC+3)' },
+              { value: 'wAT', label: 'West Africa (UTC+1)' },
+              { value: 'cet', label: 'Central Europe (UTC+1)' },
+              { value: 'est', label: 'US Eastern (UTC-5)' },
+            ],
+          },
+          {
+            key: 'courseCurrency',
+            label: 'Payment currency',
+            type: 'select',
+            options: [
+              { value: 'USD', label: 'USD — US dollar' },
+              { value: 'EUR', label: 'EUR — Euro' },
+              { value: 'GBP', label: 'GBP — Pound sterling' },
+              { value: 'KES', label: 'KES — Kenyan shilling' },
+              { value: 'NGN', label: 'NGN — Nigerian naira' },
+            ],
+          },
+          {
+            key: 'nextIntake',
+            label: 'Next intake',
+            type: 'text',
+            placeholder: 'September 2026',
+          },
+        ],
+        examples: {
+          name: 'Northstar Learning',
+          tagline: 'Career skills, taught live and finished on time.',
+        },
+      },
+      {
+        id: 'programme',
+        label: "A learning programme run by an organisation that isn't a school",
+        description:
+          'An NGO, association or company that opened an Education workspace to run training — for staff, communities or scholars.',
+        icon: 'hand-heart',
+        accent: { primary: '#0f766e', secondary: '#fbbf24' },
+        trackTitle: 'What kind of programme is it?',
+        trackDescription:
+          'Programmes report to funders and learners, so EduOS dresses completion and reach instead of campus machinery.',
+        tracks: ['open-programme', 'trainer-network', 'micro-credentials', 'community-training'],
+        fields: EDU_PROGRAMME_FIELDS,
+        credentialsTitle: 'Who is behind the programme',
+        credentialsHint:
+          'The host organisation and who it is for appear on the programme pages. Keep it as public as you want it to read.',
+        recommends: ['certificates', 'progressTracking', 'cohorts'],
+        templateKeys: ['edu-elearning', 'edu-vibrant', 'edu-global'],
+        operationalTitle: 'How the programme reports itself',
+        operationalFields: [
+          {
+            key: 'contactEmail',
+            label: 'Programme enquiries email',
+            type: 'email',
+            placeholder: 'learning@organisation.example',
+          },
+          {
+            key: 'cohortCadence',
+            label: 'Intakes',
+            type: 'select',
+            options: [
+              { value: 'rolling', label: 'Rolling — join any week' },
+              { value: 'monthly', label: 'Monthly' },
+              { value: 'cohort', label: 'One scheduled cohort' },
+            ],
+          },
+          {
+            key: 'reachTarget',
+            label: 'Learners this programme aims to reach',
+            type: 'select',
+            options: ['100', '500', '2000', '10000'].map((v) => ({
+              value: v,
+              label: `${v} learners`,
+            })),
+          },
+        ],
+        examples: {
+          name: 'Open Skills Initiative',
+          tagline: 'Free, verified training for health workers on the coast.',
+        },
+      },
+    ],
+  },
   trackTitle: 'What kind of school is this?',
-  trackDescription: 'Pick the closest fit — each track tunes which levels, features and operational fields appear next.',
+  trackDescription:
+    'Pick the closest fit — each track tunes which levels, features and operational fields appear next.',
   tracks: [
-    {
-      id: 'elearning',
-      label: 'eLearning platform',
-      description: 'Courses, cohorts and certificates — no campus timetable.',
-      icon: 'monitor',
-      accent: { primary: '#4f46e5', secondary: '#22d3ee' },
-      features: ['certificates', 'liveTutoring', 'progressTracking', 'cohorts'].map(
-        (key) => pickFeature(EDU_FEATURES, [key])[0]!,
-      ),
-      fields: EDU_CERT_FIELDS,
-    },
+    // ── Registered institution shelf ──────────────────────────────────────────
     {
       id: 'primary',
       label: 'Primary school',
       description: 'Young learners, warm guardians, friendly reporting.',
       icon: 'school',
       accent: { primary: '#0ea5e9', secondary: '#22c55e' },
-      children: EDU_LEVELS.slice(0, 4).map((l) => l.value),
-      features: ['timetable', 'feeStatements', 'meals', 'transport'].map(
-        (key) => pickFeature(EDU_FEATURES, [key])[0]!,
-      ),
+      children: EDU_LEVEL_VALUES.slice(0, 3),
+      features: tiles(EDU_FEATURES, ['timetable', 'feeStatements', 'meals', 'transport']),
+      templateKeys: ['edu-vibrant', 'edu-campus'],
     },
     {
       id: 'secondary',
@@ -323,11 +702,15 @@ export const EDUCATION_FLOW: ModeFlow = {
       description: 'Exams, results, and a strong house identity.',
       icon: 'book-open',
       accent: { primary: '#7c3aed', secondary: '#f59e0b' },
-      children: EDU_LEVELS.slice(3, 5).map((l) => l.value),
-      features: ['resultsOnline', 'feeStatements', 'timetable', 'staffDirectory'].map(
-        (key) => pickFeature(EDU_FEATURES, [key])[0]!,
-      ),
+      children: ['junior-secondary', 'senior-secondary', 'sixth-form'],
+      features: tiles(EDU_FEATURES, [
+        'resultsOnline',
+        'feeStatements',
+        'timetable',
+        'staffDirectory',
+      ]),
       fields: EDU_TIMETABLE_FIELDS,
+      templateKeys: ['edu-campus', 'edu-heritage'],
     },
     {
       id: 'k12',
@@ -335,29 +718,16 @@ export const EDUCATION_FLOW: ModeFlow = {
       description: 'All levels on one campus, one report card engine.',
       icon: 'university',
       accent: { primary: '#2563eb', secondary: '#10b981' },
-      children: EDU_LEVELS.slice(0, 5).map((l) => l.value),
-      features: EDU_FEATURES.slice(0, 6),
-    },
-    {
-      id: 'higher-ed',
-      label: 'College / university',
-      description: 'Departments, transcripts, and module enrolment.',
-      icon: 'university',
-      accent: { primary: '#1d4ed8', secondary: '#a78bfa' },
-      children: [EDU_LEVELS[5]].map((l) => l.value),
-      features: ['resultsOnline', 'staffDirectory', 'library', 'admissions'].map(
-        (key) => pickFeature(EDU_FEATURES, [key])[0]!,
-      ),
-    },
-    {
-      id: 'vocational',
-      label: 'Vocational / TVET',
-      description: 'Trades, practicals and industry placements.',
-      icon: 'wrench',
-      accent: { primary: '#ea580c', secondary: '#22d3ee' },
-      features: ['timetable', 'staffDirectory', 'admissions'].map(
-        (key) => pickFeature(EDU_FEATURES, [key])[0]!,
-      ),
+      children: EDU_LEVEL_VALUES.slice(0, 5),
+      features: tiles(EDU_FEATURES, [
+        'resultsOnline',
+        'feeStatements',
+        'timetable',
+        'staffDirectory',
+        'admissions',
+        'library',
+      ]),
+      templateKeys: ['edu-campus', 'edu-global'],
     },
     {
       id: 'boarding',
@@ -365,21 +735,10 @@ export const EDUCATION_FLOW: ModeFlow = {
       description: 'Hostel, houses, meals and transport all day-long.',
       icon: 'bed',
       accent: { primary: '#64748b', secondary: '#38bdf8' },
-      children: ['junior-secondary', 'senior-secondary'].map((v) => v),
-      features: ['meals', 'transport', 'staffDirectory', 'feeStatements'].map(
-        (key) => pickFeature(EDU_FEATURES, [key])[0]!,
-      ),
+      children: ['junior-secondary', 'senior-secondary', 'sixth-form'],
+      features: tiles(EDU_FEATURES, ['meals', 'transport', 'staffDirectory', 'feeStatements']),
       fields: EDU_HOSTEL_FIELDS,
-    },
-    {
-      id: 'special-needs',
-      label: 'Inclusive / special needs',
-      description: 'Individual plans and therapy tracking.',
-      icon: 'heartbeat',
-      accent: { primary: '#ec4899', secondary: '#22d3ee' },
-      features: ['timetable', 'staffDirectory', 'library'].map(
-        (key) => pickFeature(EDU_FEATURES, [key])[0]!,
-      ),
+      templateKeys: ['edu-heritage', 'edu-campus'],
     },
     {
       id: 'international',
@@ -387,10 +746,8 @@ export const EDUCATION_FLOW: ModeFlow = {
       description: 'IB / IGCSE routes, multilingual, global intake.',
       icon: 'globe',
       accent: { primary: '#06b6d4', secondary: '#a855f7' },
-      children: EDU_LEVELS.slice(0, 5).map((l) => l.value),
-      features: ['admissions', 'timetable', 'feeStatements', 'transport'].map(
-        (key) => pickFeature(EDU_FEATURES, [key])[0]!,
-      ),
+      children: EDU_LEVEL_VALUES.slice(0, 6),
+      features: tiles(EDU_FEATURES, ['admissions', 'timetable', 'feeStatements', 'transport']),
       fields: [
         {
           key: 'curriculumModel',
@@ -398,11 +755,12 @@ export const EDUCATION_FLOW: ModeFlow = {
           type: 'select',
           options: [
             { value: 'ib', label: 'IB (PYP / MYP / DP)' },
-            { value: 'igcse', label: ' Cambridge IGCSE / A-Level' },
+            { value: 'igcse', label: 'Cambridge IGCSE / A-Level' },
             { value: 'mixed', label: 'Mixed / blend' },
           ],
         },
       ],
+      templateKeys: ['edu-global', 'edu-campus'],
     },
     {
       id: 'madrasah',
@@ -410,12 +768,195 @@ export const EDUCATION_FLOW: ModeFlow = {
       description: 'Quran, Arabic and Islamic studies alongside academics.',
       icon: 'moon',
       accent: { primary: '#22c55e', secondary: '#f59e0b' },
-      children: EDU_LEVELS.slice(0, 5).map((l) => l.value),
-      features: ['timetable', 'staffDirectory', 'library'].map(
-        (key) => pickFeature(EDU_FEATURES, [key])[0]!,
-      ),
+      children: EDU_LEVEL_VALUES.slice(0, 5),
+      features: tiles(EDU_FEATURES, ['timetable', 'staffDirectory', 'library']),
+      templateKeys: ['edu-heritage', 'edu-campus'],
+    },
+    {
+      id: 'higher-ed',
+      label: 'College / university',
+      description: 'Departments, transcripts, and module enrolment.',
+      icon: 'university',
+      accent: { primary: '#1d4ed8', secondary: '#a78bfa' },
+      children: ['tertiary', 'undergraduate', 'postgraduate', 'doctoral'],
+      features: tiles(EDU_FEATURES, [
+        'resultsOnline',
+        'staffDirectory',
+        'library',
+        'admissions',
+        'feeStatements',
+      ]),
+      templateKeys: ['edu-global', 'edu-campus', 'edu-heritage'],
+    },
+    {
+      id: 'vocational',
+      label: 'Vocational / TVET',
+      description: 'Trades, practicals and industry placements.',
+      icon: 'wrench',
+      accent: { primary: '#ea580c', secondary: '#22d3ee' },
+      children: ['tvet', 'professional'],
+      features: tiles(EDU_FEATURES, ['timetable', 'staffDirectory', 'admissions', 'certificates']),
+      templateKeys: ['edu-vibrant', 'edu-elearning'],
+    },
+    {
+      id: 'special-needs',
+      label: 'Inclusive / special needs',
+      description: 'Individual plans and therapy tracking.',
+      icon: 'heartbeat',
+      accent: { primary: '#ec4899', secondary: '#22d3ee' },
+      children: EDU_LEVEL_VALUES.slice(0, 5),
+      features: tiles(EDU_FEATURES, ['timetable', 'staffDirectory', 'library']),
+      templateKeys: ['edu-vibrant', 'edu-campus'],
+    },
+    // ── Online academy shelf ──────────────────────────────────────────────────
+    {
+      id: 'course-library',
+      label: 'Self-paced course library',
+      description: 'A catalogue people join any day, at their own speed.',
+      icon: 'library',
+      accent: { primary: '#4f46e5', secondary: '#22d3ee' },
+      children: ['tvet', 'undergraduate', 'postgraduate', 'professional', 'adult'],
+      features: tiles(EDU_FEATURES, [
+        'courseCatalog',
+        'assessments',
+        'certificates',
+        'progressTracking',
+        'payments',
+      ]),
+      fields: EDU_CERT_FIELDS,
+      templateKeys: ['edu-elearning', 'edu-campus'],
+    },
+    {
+      id: 'cohort-academy',
+      label: 'Cohort academy',
+      description: 'Live classes on a calendar, with a tutor and a finish line.',
+      icon: 'slides',
+      accent: { primary: '#7c3aed', secondary: '#fbbf24' },
+      children: ['postgraduate', 'professional', 'adult'],
+      features: tiles(EDU_FEATURES, [
+        'liveTutoring',
+        'cohorts',
+        'progressTracking',
+        'certificates',
+        'enrolment',
+      ]),
+      fields: [
+        {
+          key: 'cohortCadence',
+          label: 'Cohorts start',
+          type: 'select',
+          options: [
+            { value: 'weekly', label: 'Every week' },
+            { value: 'monthly', label: 'Monthly' },
+            { value: 'termly', label: 'On a term calendar' },
+            { value: 'bespoke', label: 'When a group forms' },
+          ],
+        },
+        ...EDU_CERT_FIELDS,
+      ],
+      templateKeys: ['edu-elearning', 'edu-global'],
+    },
+    {
+      id: 'exam-prep',
+      label: 'Exam prep & tuition centre',
+      description: 'Past papers, drills and predicted grades.',
+      icon: 'badge-check',
+      accent: { primary: '#0ea5e9', secondary: '#f59e0b' },
+      children: ['junior-secondary', 'senior-secondary', 'sixth-form'],
+      features: tiles(EDU_FEATURES, [
+        'assessments',
+        'liveTutoring',
+        'progressTracking',
+        'feeStatements',
+      ]),
+      templateKeys: ['edu-campus', 'edu-elearning'],
+    },
+    {
+      id: 'tutoring',
+      label: '1-to-1 / small group tutoring',
+      description: 'Booked sessions, matched tutors, per-learner plans.',
+      icon: 'users',
+      accent: { primary: '#ec4899', secondary: '#38bdf8' },
+      children: EDU_LEVEL_VALUES.slice(1, 6),
+      features: tiles(EDU_FEATURES, ['liveTutoring', 'enrolment', 'payments', 'progressTracking']),
+      templateKeys: ['edu-vibrant', 'edu-elearning'],
+    },
+    {
+      id: 'corporate-training',
+      label: 'Corporate & team training',
+      description: 'Departments, seat licences, completion reporting.',
+      icon: 'building',
+      accent: { primary: '#0f766e', secondary: '#a5b4fc' },
+      children: ['professional', 'postgraduate'],
+      features: tiles(EDU_FEATURES, [
+        'courseCatalog',
+        'progressTracking',
+        'certificates',
+        'assessments',
+      ]),
+      fields: [
+        {
+          key: 'licenceModel',
+          label: 'How seats are bought',
+          type: 'select',
+          options: [
+            { value: 'per-seat', label: 'Per seat' },
+            { value: 'per-team', label: 'Per team' },
+            { value: 'enterprise', label: 'Enterprise licence' },
+          ],
+        },
+      ],
+      templateKeys: ['edu-global', 'edu-elearning'],
+    },
+    {
+      id: 'micro-credentials',
+      label: 'Micro-credentials & badges',
+      description: 'Short, stackable, verifiable certificates.',
+      icon: 'award',
+      accent: { primary: '#b45309', secondary: '#22d3ee' },
+      children: ['tvet', 'undergraduate', 'postgraduate', 'professional', 'adult'],
+      features: tiles(EDU_FEATURES, ['certificates', 'assessments', 'courseCatalog', 'enrolment']),
+      fields: EDU_CERT_FIELDS,
+      templateKeys: ['edu-elearning', 'edu-vibrant'],
+    },
+    // ── Programme shelf ───────────────────────────────────────────────────────
+    {
+      id: 'open-programme',
+      label: 'Open learning programme',
+      description: 'Anyone can join; completion and reach are what count.',
+      icon: 'compass',
+      accent: { primary: '#0f766e', secondary: '#fbbf24' },
+      children: ['tvet', 'professional', 'adult'],
+      features: tiles(EDU_FEATURES, ['courseCatalog', 'progressTracking', 'certificates']),
+      templateKeys: ['edu-elearning', 'edu-vibrant'],
+    },
+    {
+      id: 'trainer-network',
+      label: 'Trainer & practitioner network',
+      description: 'People trained to deliver the work, then kept current.',
+      icon: 'network',
+      accent: { primary: '#1d4ed8', secondary: '#34d399' },
+      children: ['professional', 'postgraduate'],
+      features: tiles(EDU_FEATURES, [
+        'staffDirectory',
+        'liveTutoring',
+        'progressTracking',
+        'certificates',
+      ]),
+      templateKeys: ['edu-global', 'edu-campus'],
+    },
+    {
+      id: 'community-training',
+      label: 'Community & outreach classes',
+      description: 'Sessions run where the people already are.',
+      icon: 'home',
+      accent: { primary: '#15803d', secondary: '#facc15' },
+      children: ['adult', 'tvet'],
+      features: tiles(EDU_FEATURES, ['enrolment', 'cohorts', 'progressTracking']),
+      templateKeys: ['edu-vibrant', 'edu-elearning'],
     },
   ],
+  childrenCatalog: Object.fromEntries(EDU_LEVELS.map((level) => [level.value, level])),
   childFieldLabel: 'Which levels do you serve?',
   childFieldHint: 'Multi-select. The label feeds tone and the pages that mention levels.',
   operationalTitle: 'How your school runs',
@@ -535,6 +1076,22 @@ export const EDUCATION_FLOW: ModeFlow = {
     'Class timetables',
     'Staff directory',
   ],
+  templateTitle: 'Pick the portal you want to start inside',
+  templateHint:
+    'Every card is a real workspace document. Installing one loads it into your draft, then the wizard dresses it — your live portal keeps serving whatever is published today.',
+  spine: [
+    { id: 'welcome', label: 'EduOS', icon: 'graduation' },
+    { id: 'identity', label: 'Brand', icon: 'sparkles' },
+    { id: 'origin', label: 'Operation', icon: 'compass' },
+    { id: 'track', label: 'Setting', icon: 'target' },
+    { id: 'levels', label: 'Levels', icon: 'layers' },
+    { id: 'features', label: 'Modules', icon: 'lightbulb' },
+    { id: 'credentials', label: 'Register', icon: 'identity' },
+    { id: 'operations', label: 'Details', icon: 'scroll' },
+    { id: 'template', label: 'Template', icon: 'images' },
+    { id: 'style', label: 'Palette', icon: 'palette' },
+    { id: 'review', label: 'Review', icon: 'badge-check' },
+  ],
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -581,6 +1138,8 @@ const NGO_MONEY_FIELDS: FlowField[] = [
 export const NON_PROFIT_FLOW: ModeFlow = {
   key: 'NON_PROFIT',
   icon: 'heart',
+  osName: 'NGO OS',
+  splashMotif: 'pulse',
   accent: { primary: '#b91c1c', secondary: '#f97316', surface: '#fef2f2' },
   splashLines: [
     'Shaping the giving story',
@@ -763,6 +1322,19 @@ export const NON_PROFIT_FLOW: ModeFlow = {
     'Donor wall (anonymity respected)',
     'Volunteer sign-ups',
   ],
+  templateTitle: 'Choose the giving experience to open with',
+  templateHint:
+    'A template is data, not a deployment. Installing one fills your draft; the live site is untouched until you publish.',
+  spine: [
+    { id: 'welcome', label: 'NGO OS', icon: 'heart' },
+    { id: 'identity', label: 'Brand', icon: 'sparkles' },
+    { id: 'track', label: 'Cause', icon: 'target' },
+    { id: 'features', label: 'Giving', icon: 'hand-heart' },
+    { id: 'operations', label: 'Details', icon: 'scroll' },
+    { id: 'template', label: 'Template', icon: 'images' },
+    { id: 'style', label: 'Palette', icon: 'palette' },
+    { id: 'review', label: 'Review', icon: 'badge-check' },
+  ],
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -781,6 +1353,8 @@ const COMMERCE_SHAPES: FlowFeature[] = [
 export const E_COMMERCE_FLOW: ModeFlow = {
   key: 'E_COMMERCE',
   icon: 'store',
+  osName: 'Commerce OS',
+  splashMotif: 'ledger',
   accent: { primary: '#0f766e', secondary: '#06b6d4', surface: '#f0fdfa' },
   splashLines: [
     'Rolling out the storefront',
@@ -945,6 +1519,19 @@ export const E_COMMERCE_FLOW: ModeFlow = {
     'Wishlist',
     'Returns & refunds',
   ],
+  templateTitle: 'Open with the storefront that fits',
+  templateHint:
+    'Catalogue and checkout logic stay in Commerce OS. This chooses the pages you start editing.',
+  spine: [
+    { id: 'welcome', label: 'Commerce', icon: 'store' },
+    { id: 'identity', label: 'Brand', icon: 'sparkles' },
+    { id: 'track', label: 'Shape', icon: 'target' },
+    { id: 'features', label: 'Surfaces', icon: 'layers' },
+    { id: 'operations', label: 'Details', icon: 'scroll' },
+    { id: 'template', label: 'Template', icon: 'images' },
+    { id: 'style', label: 'Palette', icon: 'palette' },
+    { id: 'review', label: 'Review', icon: 'badge-check' },
+  ],
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -963,6 +1550,8 @@ const PARTNER_SHAPES: FlowFeature[] = [
 export const PARTNER_FLOW: ModeFlow = {
   key: 'PARTNER',
   icon: 'handshake',
+  osName: 'Partner OS',
+  splashMotif: 'network',
   accent: { primary: '#1d4ed8', secondary: '#0ea5e9', surface: '#eff6ff' },
   splashLines: [
     'Shaping the partner journey',
@@ -1059,6 +1648,19 @@ export const PARTNER_FLOW: ModeFlow = {
     'Partner directory',
     'Application review status',
   ],
+  templateTitle: 'Start the network with a directory you can fill',
+  templateHint:
+    'Applications and tier logic stay in Partner OS. This chooses the pages your partners land on.',
+  spine: [
+    { id: 'welcome', label: 'Partner OS', icon: 'handshake' },
+    { id: 'identity', label: 'Brand', icon: 'sparkles' },
+    { id: 'track', label: 'Network', icon: 'target' },
+    { id: 'features', label: 'Surfaces', icon: 'layers' },
+    { id: 'operations', label: 'Details', icon: 'scroll' },
+    { id: 'template', label: 'Template', icon: 'images' },
+    { id: 'style', label: 'Palette', icon: 'palette' },
+    { id: 'review', label: 'Review', icon: 'badge-check' },
+  ],
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1076,6 +1678,8 @@ const GENERAL_SHAPES: FlowFeature[] = [
 export const GENERAL_FLOW: ModeFlow = {
   key: 'GENERAL',
   icon: 'sparkles',
+  osName: 'Workspace',
+  splashMotif: 'constellation',
   accent: { primary: '#4f46e5', secondary: '#06b6d4', surface: '#eef2ff' },
   splashLines: [
     'Shaping the site',
@@ -1198,6 +1802,19 @@ export const GENERAL_FLOW: ModeFlow = {
   paletteTitle: 'The palette every page inherits',
   paletteHint: 'These become CSS variables on the public site.',
   runtimeSurfaces: [],
+  templateTitle: 'Open with a page set you can rewrite',
+  templateHint:
+    'Installing a template copies its document into your draft. Nothing is published until you say so.',
+  spine: [
+    { id: 'welcome', label: 'Workspace', icon: 'sparkles' },
+    { id: 'identity', label: 'Brand', icon: 'sparkles' },
+    { id: 'track', label: 'Shape', icon: 'target' },
+    { id: 'features', label: 'Surfaces', icon: 'layers' },
+    { id: 'operations', label: 'Details', icon: 'scroll' },
+    { id: 'template', label: 'Template', icon: 'images' },
+    { id: 'style', label: 'Palette', icon: 'palette' },
+    { id: 'review', label: 'Review', icon: 'badge-check' },
+  ],
 };
 
 // ─── Registry ────────────────────────────────────────────────────────────────
@@ -1214,19 +1831,160 @@ export function getModeFlow(mode: WorkspaceMode): ModeFlow {
   return MODE_FLOWS[mode] ?? MODE_FLOWS.GENERAL;
 }
 
-/** Wizard step definition — the graph is a linear spine with branchy cards. */
-export type StepId = 'welcome' | 'identity' | 'track' | 'levels' | 'features' | 'operations' | 'style' | 'review';
+// ─── Steps ───────────────────────────────────────────────────────────────────
 
-export const STEP_ORDER: StepId[] = [
-  'welcome',
-  'identity',
-  'track',
-  'levels',
-  'features',
-  'operations',
-  'style',
-  'review',
-];
+/** Wizard step definition — the graph is a per-mode spine with branchy cards. */
+export type StepId =
+  | 'welcome'
+  | 'identity'
+  | 'origin'
+  | 'track'
+  | 'levels'
+  | 'features'
+  | 'credentials'
+  | 'operations'
+  | 'template'
+  | 'style'
+  | 'review';
+
+/**
+ * The spine, narrowed to what this client is actually being asked.
+ *
+ * EduOS can show eleven cards and NGO OS eight; an online academy never sees
+ * the register card. Because the list is derived, the progress spine and the
+ * [Continue] target can never disagree with the answers given so far.
+ */
+export function resolveSteps(
+  flow: ModeFlow,
+  origin: FlowOriginOption | null,
+  track: FlowTrack | null,
+): StepId[] {
+  return flow.spine
+    .map((entry) => entry.id)
+    .filter((id) => {
+      if (id === 'origin') return Boolean(flow.origin);
+      if (id === 'credentials') return Boolean(origin?.fields?.length);
+      if (id === 'levels') return Boolean(track?.children?.length);
+      if (id === 'features') return Boolean(track?.features?.length);
+      return true;
+    });
+}
+
+export function spineFor(
+  flow: ModeFlow,
+  steps: StepId[],
+): { id: StepId; label: string; icon: FlowIcon }[] {
+  return steps.map((id) => {
+    const entry = flow.spine.find((candidate) => candidate.id === id);
+    return entry ?? { id, label: id, icon: flow.icon };
+  });
+}
+
+// ─── Reading the graph ───────────────────────────────────────────────────────
+
+export function findOrigin(flow: ModeFlow, id: string | null): FlowOriginOption | null {
+  if (!flow.origin || !id) return null;
+  return flow.origin.options.find((option) => option.id === id) ?? null;
+}
+
+export function findTrack(flow: ModeFlow, id: string | null): FlowTrack | null {
+  if (!id) return null;
+  return flow.tracks.find((candidate) => candidate.id === id) ?? null;
+}
+
+/** The shelf offered by an origin, in the order the origin lists it. */
+export function tracksForOrigin(flow: ModeFlow, origin: FlowOriginOption | null): FlowTrack[] {
+  if (!origin?.tracks) return flow.tracks;
+  return origin.tracks
+    .map((id) => flow.tracks.find((track) => track.id === id))
+    .filter((track): track is FlowTrack => Boolean(track));
+}
+
+/** Labels and descriptions for a track's `children` keys. */
+export function childOptionsFor(
+  flow: ModeFlow,
+  track: FlowTrack,
+): { value: string; label: string; description?: string }[] {
+  const catalog = flow.childrenCatalog ?? {};
+  return (track.children ?? [])
+    .map((childKey) => catalog[childKey])
+    .filter((entry): entry is { value: string; label: string; description?: string } =>
+      Boolean(entry),
+    );
+}
+
+/**
+ * The detail card's fields: the origin's own questions first (a school is not
+ * an academy), then whatever the track adds. Keys are de-duplicated because
+ * two levels of the graph can legitimately ask about the same token.
+ */
+export function detailFieldsFor(
+  flow: ModeFlow,
+  origin: FlowOriginOption | null,
+  track: FlowTrack | null,
+): FlowField[] {
+  const base = origin?.operationalFields ?? flow.operationalFields;
+  const extra = track?.fields ?? [];
+  const seen = new Set<string>();
+  return [...base, ...extra].filter((field) => {
+    if (seen.has(field.key)) return false;
+    seen.add(field.key);
+    return true;
+  });
+}
+
+export function operationalTitleFor(flow: ModeFlow, origin: FlowOriginOption | null): string {
+  return origin?.operationalTitle ?? flow.operationalTitle;
+}
+
+/** Tiles switched on for this origin — the client still gets to uncheck them. */
+export function recommendedFeatureKeys(
+  origin: FlowOriginOption | null,
+  track: FlowTrack | null,
+): string[] {
+  const pool = new Set((track?.features ?? []).map((feature) => feature.key));
+  return (origin?.recommends ?? []).filter((key) => pool.has(key));
+}
+
+/** Which template keys the showcase should float to the front. */
+export function preferredTemplateKeys(
+  origin: FlowOriginOption | null,
+  track: FlowTrack | null,
+): string[] {
+  return [...(track?.templateKeys ?? []), ...(origin?.templateKeys ?? [])];
+}
+
+export function identityExamplesFor(
+  flow: ModeFlow,
+  origin: FlowOriginOption | null,
+): { name: string; tagline: string } {
+  return (
+    origin?.examples ?? {
+      name: 'Your organisation',
+      tagline: 'Say what you do, in the voice your audience already trusts.',
+    }
+  );
+}
+
+// ─── Persistence keys ────────────────────────────────────────────────────────
+
+/**
+ * The wizard's own answers ride in the open token map, so a refresh (or a
+ * second device) can put the client back on the card they were reading. Keys
+ * stay inside the backend's token charset.
+ */
+export function setupTokenKey(base: string): string {
+  return `setup${base}`.replace(/[^a-zA-Z0-9]/g, '');
+}
+
+export const SETUP_TOKENS = {
+  origin: setupTokenKey('Origin'),
+  track: setupTokenKey('Track'),
+  levels: (trackId: string) => setupTokenKey(`Track_${trackId}_Levels`),
+  features: (trackId: string) => setupTokenKey(`Track_${trackId}_Features`),
+  template: setupTokenKey('TemplateChosen'),
+  paletteSource: setupTokenKey('PaletteSource'),
+};
 
 /** Icon names are strings; features above may hold a filler placeholder. */
 export function isFlowIcon(value: unknown): value is FlowIcon {

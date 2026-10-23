@@ -371,6 +371,33 @@ export interface HistoryPage {
   nextCursor: number | null;
 }
 
+/**
+ * A template described without installing it.
+ *
+ * The setup wizard shows a slideshow before anything touches the draft, so the
+ * gallery carries enough of a template's own data to render an honest preview:
+ * its opening message, its palette, and the sections a visitor scrolls through.
+ */
+export interface GalleryTemplatePreview {
+  hero: {
+    eyebrow?: string;
+    headline?: string;
+    subheadline?: string;
+    alignment?: string;
+  };
+  palette: {
+    primary: string;
+    secondary: string;
+    accent: string;
+    background: string;
+    surface: string;
+  };
+  fonts: { heading: string; body: string };
+  radius: string;
+  pages: string[];
+  sections: string[];
+}
+
 export interface GalleryTemplate {
   /** Stable marketplace key — this, not an `id`, is what `/select` expects. */
   key: string;
@@ -389,6 +416,8 @@ export interface GalleryTemplate {
   source: 'BUILTIN' | 'MARKETPLACE';
   pageCount?: number;
   componentCount?: number;
+  /** Absent on a gallery served by a backend that predates the slideshow. */
+  preview?: GalleryTemplatePreview;
 }
 
 export interface GalleryResponse {

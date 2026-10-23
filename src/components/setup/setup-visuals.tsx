@@ -180,14 +180,23 @@ export function ProgressSpine({
 
 // ─── Track card ──────────────────────────────────────────────────────────────
 
+/**
+ * The selectable choice card. It takes the shape both a track and an origin
+ * option share, because the wizard asks the same kind of question at both
+ * gates — "which of these is closest to what you are?"
+ */
+export type FlowChoice = Pick<FlowTrack, 'id' | 'label' | 'description' | 'icon' | 'accent'>;
+
 export function TrackCard({
   track,
   selected,
   onSelect,
+  hint,
 }: {
-  track: FlowTrack;
+  track: FlowChoice;
   selected: boolean;
   onSelect: () => void;
+  hint?: string;
 }) {
   return (
     <motion.button
@@ -236,6 +245,11 @@ export function TrackCard({
           <span className="mt-0.5 block text-[10.5px] leading-snug text-[var(--color-ink-faint)]">
             {track.description}
           </span>
+          {hint ? (
+            <span className="mt-1 block text-[9.5px] leading-snug text-[var(--color-ink-faint)] opacity-80">
+              {hint}
+            </span>
+          ) : null}
         </span>
         {selected ? (
           <motion.span

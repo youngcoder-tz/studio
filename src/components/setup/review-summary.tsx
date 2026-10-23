@@ -10,11 +10,19 @@
 // publish.
 
 import { motion } from 'framer-motion';
-import { Check, UploadCloud } from 'lucide-react';
+import { Check, ChevronRight, UploadCloud } from 'lucide-react';
 
 import { FlowGlyph } from './icon-bridge';
 import { PresetCard } from './identity-cards';
-import type { FlowTrack, ModeFlow, FlowFeature } from '@/lib/setup-flow';
+import {
+  childOptionsFor,
+  operationalTitleFor,
+  type FlowField,
+  type FlowOriginOption,
+  type FlowTrack,
+  type ModeFlow,
+  type FlowFeature,
+} from '@/lib/setup-flow';
 import type { GlobalTokens, StudioManifest, TemplateAccent } from '@/lib/contract';
 import { WORKSPACE_MODE_LABELS } from '@/lib/contract';
 import { Button } from '@/components/ui/button';
@@ -24,11 +32,15 @@ const stagger = 0.05;
 
 export function ReviewSummary({
   flow,
+  origin,
   track,
+  levels,
   enabledFeatures,
+  detailFields,
   manifest,
   templateName,
   tokens,
+  paletteSource,
   busy,
   onBack,
   onOpenStudio,
@@ -37,11 +49,15 @@ export function ReviewSummary({
   onPickPreset,
 }: {
   flow: ModeFlow;
+  origin: FlowOriginOption | null;
   track: FlowTrack | null;
+  levels: string[];
   enabledFeatures: FlowFeature[];
+  detailFields: FlowField[];
   tokens: GlobalTokens;
   manifest: StudioManifest;
   templateName: string;
+  paletteSource: string;
   busy: 'save' | 'publish' | null;
   onBack: () => void;
   onOpenStudio: () => void;
@@ -51,6 +67,31 @@ export function ReviewSummary({
 }) {
     const name = String(tokens.siteName ?? 'Unnamed');
   const tagline = String(tokens.tagline ?? '');
+
+  // The trail reads back the answers in the order they were given, so the
+  // client can see the shape of what they commissioned — not a wall of tokens.
+  const levelLabels = track
+    ? childOptionsFor(flow, track)
+        .filter((option) => levels.includes(option.value))
+        .map((option) => option.label)
+    : [];
+  const trail: { label: string; value: string }[] = [
+    { label: 'What it is', value: origin?.label ?? flow.brandTitle },
+    { label: 'Shelf', value: track?.label ?? 'General workspace' },
+    ...(levelLabels.length
+      ? [{ label: flow.childFieldLabel ?? 'Focus', value: levelLabels.join(' · ') }]
+      : []),
+    { label: 'Capabilities', value: `${enabledFeatures.length} switched on` },
+    { label: 'Template', value: templateName || 'None installed' },
+    { label: 'Palette', value: paletteSource || 'Set by hand in the studio' },
+  ];
+
+  const credentialAnswers = (origin?.fields ?? []).filter(
+    (field) => String(tokens[field.key] ?? '').trim(),
+  );
+  const operationAnswers = detailFields.filter((field) =>
+    String(tokens[field.key] ?? '').trim(),
+  );
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
@@ -91,6 +132,12 @@ export function ReviewSummary({
                 </span>
                 <div className="min-w-0">
                   <p
+                    className="truncate text-[8.5px] font-semibold uppercase tracking-[0.24em]"
+                    style={{ color: String(tokens.accentColor ?? '#4f46e5') }}
+                  >
+                    {flow.osName}
+                  </p>
+                  <p
                     className="truncate text-base font-semibold"
                     style={{ color: String(tokens.textColor ?? '#0f172a') }}
                   >
@@ -104,12 +151,12 @@ export function ReviewSummary({
                   </p>
                 </div>
               </div>
-              {track ? (
+              {track || origin ? (
                 <span
                   className="shrink-0 rounded-full px-2.5 py-1 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-white"
-                  style={{ background: track.accent.primary }}
+                  style={{ background: (track ?? origin)?.accent.primary }}
                 >
-                  {track.label}
+                  {track?.label ?? origin?.label}
                 </span>
               ) : null}
             </div>
@@ -148,6 +195,16 @@ export function ReviewSummary({
               );
             })}
 
+            {enabledFeatures.length > 4 ? (
+              <p
+                className="mt-2.5 text-[10px] font-medium opacity-60"
+                style={{ color: String(tokens.textColor ?? '#0f172a') }}
+              >
+                +{enabledFeatures.length - 4} more capability selected — each one mounts a section
+                on the portal.
+              </p>
+            ) : null}
+
             {/* Provenance strip — which project + template this draft grows from */}
             <div
               className="mt-4 flex items-center justify-between gap-2 border-t pt-2.5"
@@ -169,16 +226,70 @@ export function ReviewSummary({
           </div>
         </div>
 
+        {/* Commissioning trail — the answers in the order they were given */}
+        <div className="surface-glass rounded-2xl p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">
+            How this workspace was commissioned
+          </p>
+          <ol className="mt-2.5 space-y-1.5">
+            {trail.map((entry, index) => (
+              <motion.li
+                key={entry.label}
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.15 + index * stagger, duration: 0.35 }}
+                className="flex items-start gap-2"
+              >
+                <ChevronRight
+                  size={12}
+                  className="mt-[3px] shrink-0 text-[var(--color-accent)]"
+                />
+                <span className="w-[96px] shrink-0 text-[9.5px] uppercase tracking-[0.16em] text-[var(--color-ink-faint)]">
+                  {entry.label}
+                </span>
+                <span className="min-w-0 flex-1 text-[11.5px] font-medium leading-snug text-[var(--color-ink)]">
+                  {entry.value}
+                </span>
+              </motion.li>
+            ))}
+          </ol>
+        </div>
+
+        {/* Registration evidence — only origins that asked for it have answers */}
+        {credentialAnswers.length ? (
+          <div className="surface-glass rounded-2xl p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">
+              {origin?.credentialsTitle ?? 'Registration details'}
+            </p>
+            <dl className="mt-2 grid gap-1.5 sm:grid-cols-2">
+              {credentialAnswers.map((field) => (
+                <div
+                  key={field.key}
+                  className="rounded-xl border border-[var(--color-line)] bg-[color-mix(in_oklab,var(--color-surface)_60%,transparent)] px-2.5 py-1.5"
+                >
+                  <dt className="text-[9px] uppercase tracking-[0.16em] text-[var(--color-ink-faint)]">
+                    {field.label}
+                  </dt>
+                  <dd className="mt-0.5 truncate text-[11.5px] font-medium text-[var(--color-ink)]">
+                    {String(tokens[field.key])}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <p className="mt-2 text-[10px] leading-relaxed text-[var(--color-ink-faint)]">
+              Saved as ordinary workspace tokens — edit them in Studio at any time, no rebuild.
+            </p>
+          </div>
+        ) : null}
+
         {/* Operational summary */}
         <div className="surface-glass rounded-2xl p-4">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">
-            Operations captured
+            {operationalTitleFor(flow, origin)}
           </p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {flow.operationalFields
-              .filter((f) => String(tokens[f.key] ?? '').trim())
-              .slice(0, 6)
-              .map((f) => (
+          {operationAnswers.length ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {operationAnswers.slice(0, 8).map((f) => (
                 <span
                   key={f.key}
                   className="inline-flex items-center gap-1 rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-0.5 text-[10px] text-[var(--color-ink-dim)]"
@@ -187,14 +298,25 @@ export function ReviewSummary({
                   <span className="font-medium">{String(tokens[f.key])}</span>
                 </span>
               ))}
-          </div>
+            </div>
+          ) : (
+            <p className="mt-2 text-[11px] leading-relaxed text-[var(--color-ink-faint)]">
+              Nothing filled in yet — every question on the details card is optional, and the
+              portal will still build. Add them whenever you have them.
+            </p>
+          )}
         </div>
 
         {/* Style presets (re-pickable here) */}
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">
-            Palette
-          </p>
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">
+              Palette
+            </p>
+            <p className="truncate text-[9.5px] text-[var(--color-ink-faint)]">
+              {paletteSource ? `from ${paletteSource.toLowerCase()}` : 'tuned by hand'}
+            </p>
+          </div>
           <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {flow.presets.map((preset) => (
               <PresetCard
@@ -232,7 +354,7 @@ export function ReviewSummary({
         {/* Actions */}
         <div className="flex flex-col gap-2 border-t border-[var(--color-line)] pt-4 sm:flex-row sm:items-center sm:justify-end">
           <Button variant="ghost" size="sm" onClick={onBack}>
-            ← Style
+            ← Back
           </Button>
           <Button variant="secondary" size="md" disabled={busy !== null} onClick={onOpenStudio}>
             Open in Studio

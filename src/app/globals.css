@@ -201,6 +201,24 @@ body {
   to { transform: rotate(360deg); }
 }
 
+@keyframes heartbeat {
+  0%, 100% { transform: scale(1); }
+  14% { transform: scale(1.07); }
+  28% { transform: scale(0.98); }
+  42% { transform: scale(1.04); }
+  56% { transform: scale(1); }
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.05) rotate(1.6deg); }
+}
+
+@keyframes roll-slow {
+  0%, 100% { transform: translateY(7px); }
+  50% { transform: translateY(-7px); }
+}
+
 .aurora-layer {
   position: absolute;
   inset: -30%;
@@ -265,11 +283,16 @@ body {
 .orbit-slow { animation: orbit-slow 26s linear infinite; }
 .orbit-slow-rev { animation: orbit-slow 34s linear infinite reverse; }
 
+/* Per-mode splash signatures — EduOS rises, NGO beats, Commerce rolls. */
+.beat-slow { animation: heartbeat 2.2s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+.breathe-slow { animation: breathe 9s ease-in-out infinite; }
+.roll-slow { animation: roll-slow 4.5s ease-in-out infinite; }
+
 /* Respect reduced motion — the splash becomes a calm fade instead of a show. */
 @media (prefers-reduced-motion: reduce) {
   .aurora-a, .aurora-b, .float-slow, .pulse-ring::after, .pulse-ring::before,
   .beam-sweep::after, .sector-rise, .grid-veil, .dash-flow,
-  .orbit-slow, .orbit-slow-rev {
+  .orbit-slow, .orbit-slow-rev, .beat-slow, .breathe-slow, .roll-slow {
     animation: none !important;
   }
 }

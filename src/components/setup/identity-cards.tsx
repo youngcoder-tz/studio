@@ -37,11 +37,18 @@ export function IdentityCard({
   flow,
   tokens,
   onChange,
+  examples,
 }: {
   flow: ModeFlow;
   tokens: GlobalTokens;
   onChange: (key: string, value: string | number) => void;
+  /** A real example for the origin the client just picked. */
+  examples?: { name: string; tagline: string };
 }) {
+  const nameHint = examples?.name ?? 'Riverside Academy';
+  const taglineHint =
+    examples?.tagline ?? 'Learning with purpose, leading with care.';
+
   return (
     <div className="space-y-5">
       <motion.div variants={list} initial="hidden" animate="show" className="space-y-4">
@@ -51,13 +58,7 @@ export function IdentityCard({
               id="setup-siteName"
               value={String(tokens.siteName ?? '')}
               maxLength={120}
-              placeholder={
-                flow.key === 'EDUCATION'
-                  ? 'Riverside Academy'
-                  : flow.key === 'NON_PROFIT'
-                    ? 'The Water Foundation'
-                    : 'Your organisation'
-              }
+              placeholder={nameHint}
               onChange={(event) => onChange('siteName', event.target.value)}
               className="h-10 text-base font-medium"
               autoFocus
@@ -71,11 +72,7 @@ export function IdentityCard({
               id="setup-tagline"
               value={String(tokens.tagline ?? '')}
               maxLength={240}
-              placeholder={
-                flow.key === 'EDUCATION'
-                  ? 'Learning with purpose, leading with care.'
-                  : 'Say what you do in the voice your audience already trusts.'
-              }
+              placeholder={taglineHint}
               onChange={(event) => onChange('tagline', event.target.value)}
               className="min-h-[68px]"
             />
@@ -139,10 +136,13 @@ export function OperationsCard({
   fields,
   tokens,
   onChange,
+  issues,
 }: {
   fields: FlowField[];
   tokens: GlobalTokens;
   onChange: (key: string, value: string | number) => void;
+  /** Token-rule problems from the client mirror of the backend's validator. */
+  issues?: Record<string, string>;
 }) {
   return (
     <motion.div
@@ -162,6 +162,7 @@ export function OperationsCard({
             value={String(tokens[field.key] ?? '')}
             onChange={(value) => onChange(field.key, value)}
             index={index}
+            issue={issues?.[field.key]}
           />
         </motion.div>
       ))}
@@ -173,11 +174,13 @@ function DynamicField({
   field,
   value,
   onChange,
+  issue,
 }: {
   field: FlowField;
   value: string;
   onChange: (value: string) => void;
   index: number;
+  issue?: string;
 }) {
   const inputType =
     field.type === 'email' ? 'email' : field.type === 'tel' ? 'tel' : field.type === 'url' ? 'url' : 'text';
@@ -185,7 +188,7 @@ function DynamicField({
     <Field
       label={field.label}
       hint={field.hint}
-      error={field.required && !value.trim() ? 'Required.' : null}
+      error={issue ?? (field.required && !value.trim() ? 'Required.' : null)}
     >
       {field.type === 'select' ? (
         <div className="flex flex-wrap gap-1.5">
