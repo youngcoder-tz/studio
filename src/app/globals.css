@@ -41,8 +41,6 @@
     rgba(99, 102, 241, 0.16),
     transparent
   );
-  --shadow-soft: 0 40px 80px -60px rgba(79, 70, 229, 0.9);
-  --shadow-panel: 0 60px 120px -80px rgba(15, 23, 42, 0.9);
   --blur-panel: blur(18px) saturate(120%);
 }
 
@@ -91,8 +89,6 @@
     rgba(165, 180, 252, 0.22),
     transparent
   );
-  --shadow-soft: 0 50px 100px -70px rgba(129, 140, 248, 0.45);
-  --shadow-panel: 0 80px 140px -90px rgba(99, 102, 241, 0.4);
   --blur-panel: blur(22px) saturate(130%);
 }
 
@@ -179,7 +175,6 @@ body {
   background: var(--color-surface);
   backdrop-filter: blur(16px) saturate(118%);
   -webkit-backdrop-filter: blur(16px) saturate(118%);
-  box-shadow: var(--shadow-soft);
   position: relative;
 }
 

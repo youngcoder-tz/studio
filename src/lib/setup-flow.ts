@@ -584,6 +584,8 @@ export const EDUCATION_FLOW: ModeFlow = {
         // An academy with no campus has no school number to quote, so it is not
         // asked for registration evidence. Its delivery questions live on the
         // details card instead, and the register card never appears.
+        credentialsHint:
+          'No register number asked — EduOS wants to know how you teach, not who licensed you.',
         operationalTitle: 'How the academy runs',
         operationalFields: [
           ...EDU_ONLINE_FIELDS,
