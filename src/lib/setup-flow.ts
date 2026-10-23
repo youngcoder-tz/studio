@@ -579,14 +579,14 @@ export const EDUCATION_FLOW: ModeFlow = {
           'corporate-training',
           'micro-credentials',
         ],
-        fields: EDU_ONLINE_FIELDS,
-        credentialsTitle: 'How the academy runs',
-        credentialsHint:
-          'Delivery model and cohort size tune the learner pages. Certificate title prints on the completion slip.',
         recommends: ['certificates', 'progressTracking', 'cohorts', 'courseCatalog'],
         templateKeys: ['edu-elearning', 'edu-vibrant', 'edu-campus'],
+        // An academy with no campus has no school number to quote, so it is not
+        // asked for registration evidence. Its delivery questions live on the
+        // details card instead, and the register card never appears.
         operationalTitle: 'How the academy runs',
         operationalFields: [
+          ...EDU_ONLINE_FIELDS,
           {
             key: 'admissionsEmail',
             label: 'Learner support email',
@@ -823,7 +823,6 @@ export const EDUCATION_FLOW: ModeFlow = {
         'progressTracking',
         'payments',
       ]),
-      fields: EDU_CERT_FIELDS,
       templateKeys: ['edu-elearning', 'edu-campus'],
     },
     {
@@ -852,7 +851,6 @@ export const EDUCATION_FLOW: ModeFlow = {
             { value: 'bespoke', label: 'When a group forms' },
           ],
         },
-        ...EDU_CERT_FIELDS,
       ],
       templateKeys: ['edu-elearning', 'edu-global'],
     },
@@ -916,7 +914,6 @@ export const EDUCATION_FLOW: ModeFlow = {
       accent: { primary: '#b45309', secondary: '#22d3ee' },
       children: ['tvet', 'undergraduate', 'postgraduate', 'professional', 'adult'],
       features: tiles(EDU_FEATURES, ['certificates', 'assessments', 'courseCatalog', 'enrolment']),
-      fields: EDU_CERT_FIELDS,
       templateKeys: ['edu-elearning', 'edu-vibrant'],
     },
     // ── Programme shelf ───────────────────────────────────────────────────────
