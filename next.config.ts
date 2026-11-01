@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  reactCompiler: true,
+  // React Compiler is disabled: its memo cache corrupts Zustand's
+  // useSyncExternalStore hook state in dev ("Should have a queue") when
+  // components have early returns. Re-enable only after a compiler bump.
+  reactCompiler: false,
   /**
    * The Studio previews the draft by embedding the client portal inside an
    * iframe. That portal is served from the project's own origin (or, in

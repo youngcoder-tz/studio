@@ -22,6 +22,7 @@ export type AuthAlertKind =
   | 'rate_limited'
   | 'network'
   | 'notice'
+  | 'session_expired'
   | 'generic';
 
 export interface AuthAlertContent {
@@ -76,6 +77,12 @@ const TONE: Record<
     title: 'text-[var(--color-ink)]',
     body: 'text-[var(--color-ink-dim)]',
   },
+  session_expired: {
+    wrap: 'border-[var(--color-warn)]/35 bg-[var(--color-warn)]/10',
+    icon: 'text-[var(--color-warn)]',
+    title: 'text-[var(--color-ink)]',
+    body: 'text-[var(--color-ink-dim)]',
+  },
 };
 
 const ICON: Record<AuthAlertKind, ComponentType<{ size?: number | string; className?: string }>> =
@@ -87,6 +94,7 @@ const ICON: Record<AuthAlertKind, ComponentType<{ size?: number | string; classN
     rate_limited: Clock,
     network: WifiOff,
     notice: Info,
+    session_expired: Clock,
   };
 
 /**

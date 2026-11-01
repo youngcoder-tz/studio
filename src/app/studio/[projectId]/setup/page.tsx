@@ -37,7 +37,6 @@ import { useGallery, useManifest, useWorkspaceDocument } from "@/lib/api/hooks";
 import { refreshSessionFromCookie } from "@/lib/api/client";
 import {
   fetchDocument,
-  publishWorkspace,
   replaceDocument,
   selectTemplate,
 } from "@/lib/api/workspace";
@@ -47,12 +46,13 @@ import type {
   GlobalTokens,
   StudioManifest,
   WorkspaceDocument,
+  WorkspaceMode,
 } from "@/lib/contract";
 import { WORKSPACE_MODE_LABELS } from "@/lib/contract";
 import { brandFromTokens, type SeedCandidate } from "@/lib/palette";
 import {
   SETUP_TOKENS,
-  childOptionsFor,
+  WORKSPACE_SEED_NAMES,
   detailFieldsFor,
   findOrigin,
   findTrack,
@@ -60,10 +60,12 @@ import {
   identityExamplesFor,
   operationalTitleFor,
   preferredTemplateKeys,
+  templateKeyLabel,
   recommendedFeatureKeys,
   resolveSteps,
   spineFor,
   tracksForOrigin,
+  galleryCopyFor,
   type FlowIcon,
   type FlowOriginOption,
   type FlowTrack,
@@ -78,23 +80,25 @@ import {
   AuroraBackdrop,
   ContinueButton,
   FeatureTile,
-  LevelChip,
   Panel,
   ProgressSpine,
-  StepHeading,
+  StepCard,
   TrackCard,
+  TrackGallery,
 } from "@/components/setup/setup-visuals";
 import {
   IdentityCard,
   OperationsCard,
+  RegistryPanel,
 } from "@/components/setup/identity-cards";
 import { PaletteStudio } from "@/components/setup/palette-studio";
 import { ReviewSummary } from "@/components/setup/review-summary";
 import { TemplateShowcase } from "@/components/setup/template-showcase";
 import { ModeSplash } from "@/components/splash/mode-splash";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 
-type BusyState = "select" | "save" | "publish" | null;
+type BusyState = "select" | "save" | null;
 
 export default function WorkspaceSetupPage({
   params,
@@ -128,7 +132,8 @@ export default function WorkspaceSetupPage({
   // identity may not see the project, or because the API is not answering.
   if (manifest.isError || documentQuery.isError) {
     const error = (manifest.error ?? documentQuery.error) as Error;
-    const unsignedIn = isUnsignedIn(manifest.error) || isUnsignedIn(documentQuery.error);
+    const unsignedIn =
+      isUnsignedIn(manifest.error) || isUnsignedIn(documentQuery.error);
 
     const retrySession = async () => {
       // A dashboard session on the shared root domain is enough — trade the
@@ -148,7 +153,9 @@ export default function WorkspaceSetupPage({
             />
             <div className="space-y-1">
               <h1 className="text-base font-semibold">
-                {unsignedIn ? "This workspace needs a session" : "Could not open setup"}
+                {unsignedIn
+                  ? "This workspace needs a session"
+                  : "Could not open setup"}
               </h1>
               <p className="text-xs leading-relaxed text-[var(--color-ink-faint)]">
                 {unsignedIn
@@ -173,7 +180,9 @@ export default function WorkspaceSetupPage({
               href="/studio"
               className="block text-[11px] text-[var(--color-ink-faint)] underline-offset-2 hover:underline"
             >
-              {unsignedIn ? "Sign in on the launcher instead" : "Back to projects"}
+              {unsignedIn
+                ? "Sign in on the launcher instead"
+                : "Back to projects"}
             </Link>
           </Panel>
         </div>
@@ -231,12 +240,18 @@ function SetupWizard({
   const flow = useMemo(() => getModeFlow(manifest.workspaceMode), [manifest]);
 
   // The draft's tokens are the wizard's memory: its own answers (origin,
-  // track, levels, modules) are stored there too, so a refresh — or a second
-  // device — restores the same answers instead of starting over.
-  const baseTokens = useMemo<GlobalTokens>(
-    () => ({ ...manifest.baseTokens, ...initialDocument.globalTokens }),
-    [manifest, initialDocument],
-  );
+  // track, modules) are stored there too, so a refresh — or a second
+  // device — restores the same answers instead of starting over. The brand
+  // name auto-fills from the project's own name when nobody has typed one
+  // yet — the showcase starts populated, never blank.
+  const baseTokens = useMemo<GlobalTokens>(() => {
+    const merged = { ...manifest.baseTokens, ...initialDocument.globalTokens };
+    const seededName = textOf(merged.siteName).trim();
+    if (!seededName || WORKSPACE_SEED_NAMES.has(seededName)) {
+      merged.siteName = manifest.projectName;
+    }
+    return merged;
+  }, [manifest, initialDocument]);
 
   const restored = useMemo(() => {
     const originId = textOf(baseTokens[SETUP_TOKENS.origin]);
@@ -244,7 +259,6 @@ function SetupWizard({
     return {
       origin: findOrigin(flow, originId),
       track: findTrack(flow, trackId),
-      levels: trackId ? csvOf(baseTokens[SETUP_TOKENS.levels(trackId)]) : [],
       features: trackId
         ? csvOf(baseTokens[SETUP_TOKENS.features(trackId)])
         : [],
@@ -260,7 +274,6 @@ function SetupWizard({
     restored.origin,
   );
   const [track, setTrack] = useState<FlowTrack | null>(restored.track);
-  const [levels, setLevels] = useState<string[]>(restored.levels);
   const [features, setFeatures] = useState<string[]>(restored.features);
   const [paletteSource, setPaletteSource] = useState<string>(
     restored.paletteSource,
@@ -314,18 +327,21 @@ function SetupWizard({
   }, [document, tokens]);
 
   /** Install a template as the draft document. Replaces the draft, never the
-   *  live site — and it is what the palette step then reads its brand from. */
-  const installTemplate = async (templateKey: string) => {
+   *  live site — and it is what the palette step then reads its brand from.
+   *  Returns whether the install landed (false keeps the wizard on this step). */
+  const installTemplate = async (templateKey: string): Promise<boolean> => {
     setBusy("select");
     setError(null);
     try {
       const result = await selectTemplate(projectId, templateKey, false);
       setDocument(result.document);
       setTokens({ ...manifest.baseTokens, ...result.document.globalTokens });
-      setPaletteSource(`the ${result.templateId} template`);
-      toast.success(`${result.templateId} is now your draft.`);
+      setPaletteSource(`the ${templateKeyLabel(result.templateId)} template`);
+      toast.success(`${templateKeyLabel(result.templateId)} is now your draft.`);
+      return true;
     } catch (caught) {
       setError(messageOf(caught));
+      return false;
     } finally {
       setBusy(null);
     }
@@ -387,42 +403,12 @@ function SetupWizard({
     return enqueued;
   };
 
-  const publishAndOpen = async () => {
-    if (!validation.ok) {
-      setError(
-        `The workspace API would reject ${validation.issues.length} token value${validation.issues.length === 1 ? "" : "s"}. They are marked on the Details and Style cards.`,
-      );
-      return;
-    }
-    setBusy("publish");
-    setError(null);
-    try {
-      await persistDraft("Workspace setup final review");
-      await publishWorkspace(
-        projectId,
-        `Workspace setup: ${manifest.projectName} commissioned.`,
-      );
-      toast.success("Published. Your portal is live.");
-      sessionStorage.setItem(`workspace-setup-complete:${projectId}`, "1");
-      router.push(`/studio/${projectId}`);
-    } catch (caught) {
-      setError(messageOf(caught));
-      setBusy(null);
-    }
-  };
-
   const saveDraftAndOpen = async () => {
     await persistDraft("Workspace setup: ready to launch");
     if (!error) {
       sessionStorage.setItem(`workspace-setup-complete:${projectId}`, "1");
-      router.push(`/studio/${projectId}`);
+      router.push(`/studio/${projectId}/editor`);
     }
-  };
-
-  const skipSetup = async () => {
-    await persistDraft("Workspace setup skipped");
-    sessionStorage.setItem(`workspace-setup-complete:${projectId}`, "1");
-    router.push(`/studio/${projectId}`);
   };
 
   // ─── Navigation ────────────────────────────────────────────────────────────
@@ -474,14 +460,12 @@ function SetupWizard({
   const commitOrigin = (next: FlowOriginOption) => {
     setOrigin(next);
     setTrack(null);
-    setLevels([]);
     setFeatures([]);
     setTokens((current) => ({ ...current, [SETUP_TOKENS.origin]: next.id }));
   };
 
   const commitTrack = (next: FlowTrack) => {
     setTrack(next);
-    setLevels([]);
     const recommended = recommendedFeatureKeys(origin, next);
     setFeatures(recommended);
     setTokens((current) => ({
@@ -489,16 +473,6 @@ function SetupWizard({
       [SETUP_TOKENS.track]: next.id,
       [SETUP_TOKENS.features(next.id)]: recommended.join(","),
     }));
-  };
-
-  const commitLevels = (selected: string[]) => {
-    setLevels(selected);
-    if (track) {
-      setTokens((current) => ({
-        ...current,
-        [SETUP_TOKENS.levels(track.id)]: selected.join(","),
-      }));
-    }
   };
 
   // One source of truth per toggle: the token mirror is rewritten from the new
@@ -557,16 +531,16 @@ function SetupWizard({
     return candidates;
   }, [gallery, document.templateId, track, manifest.baseTokens]);
 
-  const modeTemplates = useMemo(
-    () =>
-      gallery.filter(
-        (template) => template.category === manifest.workspaceMode,
-      ),
-    [gallery, manifest.workspaceMode],
-  );
+  const modeTemplates = useMemo(() => {
+    // Fully registry-driven: only templates actually deployed and registered
+    // for this workspace mode appear (each is a row of the gallery API).
+    return gallery.filter(
+      (template) => template.category === manifest.workspaceMode,
+    );
+  }, [gallery, manifest.workspaceMode]);
 
   return (
-    <main className="relative min-h-screen overflow-hidden">
+    <main className="relative flex min-h-screen flex-col overflow-hidden">
       <AuroraBackdrop
         primary={track?.accent.primary ?? flow.accent.primary}
         secondary={track?.accent.secondary ?? flow.accent.secondary}
@@ -595,17 +569,6 @@ function SetupWizard({
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <button
-            type="button"
-            onClick={() => void skipSetup()}
-            disabled={busy !== null}
-            className={cn(
-              "focus-ring rounded-full border border-[var(--color-line)] px-3 py-1.5 text-[11px] text-[var(--color-ink-dim)] transition-colors hover:border-[var(--color-line-strong)]",
-              busy !== null && "opacity-50",
-            )}
-          >
-            Skip for now
-          </button>
         </div>
       </header>
 
@@ -651,8 +614,11 @@ function SetupWizard({
         </div>
       ) : null}
 
-      {/* Card stage */}
-      <div className="relative z-10 mx-auto w-full max-w-6xl px-5 py-8 sm:px-8">
+      {/* Card stage — flex-grows to fill the viewport between the spine and
+          the footer note, and centres the step card in that space. The card
+          itself is fixed-height on large screens with an internal scroll
+          body, so the layout is the same frame on every step. */}
+      <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-5 pb-4 pt-6 sm:px-8">
         <AnimatePresence mode="wait">
           <motion.div
             key={step}
@@ -660,7 +626,7 @@ function SetupWizard({
             animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
             exit={{ opacity: 0, y: -18, filter: "blur(6px)" }}
             transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-            className="w-full"
+            className="flex w-full flex-col justify-center"
           >
             {step === "welcome" ? (
               <WelcomeCard
@@ -669,27 +635,16 @@ function SetupWizard({
                 busy={busy === "select"}
                 templateId={document.templateId}
                 onContinue={advance}
-                onOpenStudio={() => router.push(`/studio/${projectId}`)}
               />
             ) : null}
 
             {step === "identity" ? (
-              <Panel className="p-5 sm:p-6">
-                <StepHeading
-                  step={stepProgress(stepIndex, steps.length)}
-                  title="Who is this portal for?"
-                  description="Name, tagline and a logo — the identity every page inherits."
-                  accent={flow.accent.primary}
-                />
-                <div className="mt-6 max-w-lg">
-                  <IdentityCard
-                    flow={flow}
-                    tokens={tokens}
-                    onChange={writeToken}
-                    examples={identityExamplesFor(flow, origin)}
-                  />
-                </div>
-                <div className="mt-6 flex justify-center">
+              <StepCard
+                step={stepProgress(stepIndex, steps.length)}
+                title="Make it visibly yours"
+                description="Your identity, seen the way the world will see it — live on a billboard while you edit it."
+                accent={flow.accent.primary}
+                footer={
                   <ContinueButton
                     label="Continue"
                     hint="Saved as draft between every step."
@@ -698,19 +653,43 @@ function SetupWizard({
                     accent={flow.accent}
                     onClick={() => void advanceWithSave()}
                   />
+                }
+              >
+                <div className="mx-auto w-full max-w-4xl py-2">
+                  <IdentityCard
+                    flow={flow}
+                    tokens={tokens}
+                    onChange={writeToken}
+                    autoName={manifest.projectName}
+                    examples={identityExamplesFor(flow, origin)}
+                  />
                 </div>
-              </Panel>
+              </StepCard>
             ) : null}
 
             {step === "origin" && flow.origin ? (
-              <Panel className="p-5 sm:p-6">
-                <StepHeading
-                  step={stepProgress(stepIndex, steps.length)}
-                  title={flow.origin.title}
-                  description={flow.origin.description}
-                  accent={flow.accent.primary}
-                />
-                <div className="mt-5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+              <StepCard
+                step={stepProgress(stepIndex, steps.length)}
+                title={flow.origin.title}
+                description={flow.origin.description}
+                accent={flow.accent.primary}
+                footer={
+                  <ContinueButton
+                    label={origin ? "Continue as" : "Tell us what this is"}
+                    wide
+                    hint={
+                      origin
+                        ? origin.label
+                        : "The one operation below matches reality"
+                    }
+                    disabled={!origin || busy !== null}
+                    busy={busy === "save"}
+                    accent={origin?.accent ?? flow.accent}
+                    onClick={() => void advanceWithSave()}
+                  />
+                }
+              >
+                <div className="grid gap-2.5 py-2 sm:grid-cols-2 lg:grid-cols-3">
                   {flow.origin.options.map((option, index) => (
                     <motion.div
                       key={option.id}
@@ -729,126 +708,70 @@ function SetupWizard({
                   ))}
                 </div>
                 {flow.origin.note && origin ? (
-                  <p className="mt-4 rounded-xl border border-[var(--color-line)] px-3 py-2 text-[11px] leading-relaxed text-[var(--color-ink-faint)]">
+                  <motion.p
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.15 }}
+                    className="mx-auto mt-4 max-w-xl text-center text-[11px] leading-relaxed text-[var(--color-ink-faint)]"
+                  >
                     {flow.origin.note}
-                  </p>
+                  </motion.p>
                 ) : null}
-                <div className="mt-6 flex justify-center">
-                  <ContinueButton
-                    label={
-                      origin
-                        ? `Continue as ${origin.label}`
-                        : "Tell us what this is"
-                    }
-                    disabled={!origin || busy !== null}
-                    busy={busy === "save"}
-                    accent={origin?.accent ?? flow.accent}
-                    onClick={() => void advanceWithSave()}
-                  />
-                </div>
-              </Panel>
+              </StepCard>
             ) : null}
 
             {step === "track" ? (
-              <Panel className="p-5 sm:p-6">
-                <StepHeading
-                  step={stepProgress(stepIndex, steps.length)}
-                  title={origin?.trackTitle ?? flow.trackTitle}
-                  description={
-                    origin?.trackDescription ?? flow.trackDescription
-                  }
-                  accent={flow.accent.primary}
-                />
-                <div className="mt-5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-                  {tracksForOrigin(flow, origin).map((trackOption, index) => (
-                    <motion.div
-                      key={trackOption.id}
-                      initial={{ opacity: 0, y: 14 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.045, duration: 0.4 }}
-                      style={{ minHeight: "100%" }}
-                    >
-                      <TrackCard
-                        track={trackOption}
-                        selected={track?.id === trackOption.id}
-                        onSelect={() => commitTrack(trackOption)}
-                      />
-                    </motion.div>
-                  ))}
-                </div>
-                <div className="mt-6 flex justify-center">
+              <StepCard
+                step={stepProgress(stepIndex, steps.length)}
+                title={origin?.trackTitle ?? flow.trackTitle}
+                description={origin?.trackDescription ?? flow.trackDescription}
+                accent={flow.accent.primary}
+                footer={
                   <ContinueButton
-                    label={
-                      track
-                        ? `Continue as ${track.label}`
-                        : "Pick a focus to continue"
-                    }
+                    label={track ? "Continue as" : "Pick a focus to continue"}
+                    wide
+                    hint={track?.label}
                     disabled={!track || busy !== null}
                     busy={busy === "save"}
                     accent={track?.accent ?? flow.accent}
                     onClick={() => void advanceWithSave()}
                   />
-                </div>
-              </Panel>
+                }
+              >
+                <TrackGallery
+                  tracks={tracksForOrigin(flow, origin)}
+                  selectedId={track?.id ?? null}
+                  onSelect={commitTrack}
+                  accent={flow.accent}
+                  unit={galleryCopyFor(flow.key).unit}
+                  placeholder={galleryCopyFor(flow.key).placeholder}
+                  suggestions={galleryCopyFor(flow.key).suggestions}
+                />
+              </StepCard>
             ) : null}
 
-            {step === "levels" && track ? (
-              <Panel className="p-5 sm:p-6">
-                <StepHeading
-                  step={stepProgress(stepIndex, steps.length)}
-                  title={flow.childFieldLabel ?? "Which subset?"}
-                  description={flow.childFieldHint ?? "Pick all that apply."}
-                  accent={track.accent.primary}
-                />
-                <div className="mt-5 flex flex-wrap gap-2">
-                  {childOptionsFor(flow, track).map((level, index) => (
-                    <LevelChip
-                      key={level.value}
-                      label={level.label}
-                      description={level.description}
-                      selected={levels.includes(level.value)}
-                      delay={index * 0.04}
-                      onToggle={() =>
-                        commitLevels(
-                          levels.includes(level.value)
-                            ? levels.filter((value) => value !== level.value)
-                            : [...levels, level.value],
-                        )
-                      }
-                    />
-                  ))}
-                </div>
-                <p className="mt-3 text-[10px] text-[var(--color-ink-faint)]">
-                  {levels.length
-                    ? `${levels.length} level${levels.length === 1 ? "" : "s"} selected — the portal's copy will name them.`
-                    : "Nothing selected yet. This card is optional."}
-                </p>
-                <div className="mt-6 flex justify-center">
+            {step === "features" && track ? (
+              <StepCard
+                step={stepProgress(stepIndex, steps.length)}
+                title={flow.featuresTitle ?? "What matters most?"}
+                description={
+                  origin?.recommends?.length
+                    ? `${origin.label} normally runs these. Toggle any off — the Studio can add them back later.`
+                    : (flow.featuresHint ??
+                      "Toggle on the tiles you want visible.")
+                }
+                accent={track.accent.primary}
+                footer={
                   <ContinueButton
                     label="Continue"
-                    hint="Optional — you can refine later."
+                    hint="Optional — the Studio can surface or hide these later."
                     busy={busy === "save"}
                     accent={track.accent}
                     onClick={() => void advanceWithSave()}
                   />
-                </div>
-              </Panel>
-            ) : null}
-
-            {step === "features" && track ? (
-              <Panel className="p-5 sm:p-6">
-                <StepHeading
-                  step={stepProgress(stepIndex, steps.length)}
-                  title={flow.featuresTitle ?? "What matters most?"}
-                  description={
-                    origin?.recommends?.length
-                      ? `${origin.label} normally runs these. Toggle any off — the Studio can add them back later.`
-                      : (flow.featuresHint ??
-                        "Toggle on the tiles you want visible.")
-                  }
-                  accent={track.accent.primary}
-                />
-                <div className="mt-5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                }
+              >
+                <div className="grid gap-2.5 py-2 sm:grid-cols-2 lg:grid-cols-3">
                   {track.features?.map((feature, index) => (
                     <FeatureTile
                       key={feature.key}
@@ -859,43 +782,24 @@ function SetupWizard({
                     />
                   ))}
                 </div>
-                <p className="mt-3 text-[10px] text-[var(--color-ink-faint)]">
+                <p className="mt-3 text-center text-[10px] text-[var(--color-ink-faint)]">
                   {features.length
                     ? `${features.length} module${features.length === 1 ? "" : "s"} switched on.`
                     : "No modules on — the portal keeps the essentials only."}
                 </p>
-                <div className="mt-6 flex justify-center">
-                  <ContinueButton
-                    label="Continue"
-                    hint="Optional — the Studio can surface or hide these later."
-                    busy={busy === "save"}
-                    accent={track.accent}
-                    onClick={() => void advanceWithSave()}
-                  />
-                </div>
-              </Panel>
+              </StepCard>
             ) : null}
 
             {step === "credentials" && origin?.fields?.length ? (
-              <Panel className="p-5 sm:p-6">
-                <StepHeading
-                  step={stepProgress(stepIndex, steps.length)}
-                  title={origin.credentialsTitle ?? "Prove it is legitimate"}
-                  description={
-                    origin.credentialsHint ??
-                    "These describe the institution. They never change how the portal behaves."
-                  }
-                  accent={origin.accent.primary}
-                />
-                <div className="mt-6 max-w-2xl">
-                  <OperationsCard
-                    fields={origin.fields}
-                    tokens={tokens}
-                    onChange={writeToken}
-                    issues={tokenIssues}
-                  />
-                </div>
-                <div className="mt-6 flex justify-center">
+              <StepCard
+                step={stepProgress(stepIndex, steps.length)}
+                title={origin.credentialsTitle ?? "Prove it is legitimate"}
+                description={
+                  origin.credentialsHint ??
+                  "These describe the institution. They never change how the portal behaves."
+                }
+                accent={origin.accent.primary}
+                footer={
                   <ContinueButton
                     label={
                       missingCredentials.length
@@ -907,27 +811,36 @@ function SetupWizard({
                     accent={origin.accent}
                     onClick={() => void advanceWithSave()}
                   />
+                }
+              >
+                <div className="grid w-full gap-7 py-2 xl:grid-cols-[minmax(0,1fr)_minmax(300px,370px)] xl:items-start xl:gap-8">
+                  <div className="mx-auto w-full max-w-2xl xl:mx-0">
+                    <OperationsCard
+                      fields={origin.fields}
+                      tokens={tokens}
+                      onChange={writeToken}
+                      issues={tokenIssues}
+                    />
+                  </div>
+                  <div className="order-first xl:order-none xl:sticky xl:top-2">
+                    <RegistryPanel
+                      fields={origin.fields}
+                      tokens={tokens}
+                      siteName={String(tokens.siteName ?? "")}
+                      accent={origin.accent}
+                    />
+                  </div>
                 </div>
-              </Panel>
+              </StepCard>
             ) : null}
 
             {step === "operations" ? (
-              <Panel className="p-5 sm:p-6">
-                <StepHeading
-                  step={stepProgress(stepIndex, steps.length)}
-                  title={operationalTitleFor(flow, origin)}
-                  description="These become safe design tokens. They never touch business logic."
-                  accent={flow.accent.primary}
-                />
-                <div className="mt-6 max-w-2xl">
-                  <OperationsCard
-                    fields={detailFields}
-                    tokens={tokens}
-                    onChange={writeToken}
-                    issues={tokenIssues}
-                  />
-                </div>
-                <div className="mt-6 flex justify-center">
+              <StepCard
+                step={stepProgress(stepIndex, steps.length)}
+                title={operationalTitleFor(flow, origin)}
+                description="These become safe design tokens. They never touch business logic."
+                accent={flow.accent.primary}
+                footer={
                   <ContinueButton
                     label="Continue"
                     busy={busy === "save"}
@@ -935,24 +848,33 @@ function SetupWizard({
                     accent={track?.accent ?? flow.accent}
                     onClick={() => void advanceWithSave()}
                   />
+                }
+              >
+                <div className="mx-auto max-w-2xl py-2">
+                  <OperationsCard
+                    fields={detailFields}
+                    tokens={tokens}
+                    onChange={writeToken}
+                    issues={tokenIssues}
+                  />
                 </div>
-              </Panel>
+              </StepCard>
             ) : null}
 
             {step === "template" ? (
-              <Panel className="p-5 sm:p-6">
-                <StepHeading
-                  step={stepProgress(stepIndex, steps.length)}
-                  title={
-                    flow.templateTitle ?? "Pick the look you want to start from"
-                  }
-                  description={
-                    flow.templateHint ??
-                    "Real templates, previewed live. Loading one replaces your draft — never your live site."
-                  }
-                  accent={flow.accent.primary}
-                />
-                <div className="mt-5">
+              <StepCard
+                step={stepProgress(stepIndex, steps.length)}
+                title={
+                  flow.templateTitle ?? "Pick the look you want to start from"
+                }
+                description={
+                  flow.templateHint ??
+                  "Real templates, previewed live. Loading one replaces your draft — never your live site."
+                }
+                accent={flow.accent.primary}
+                contentClassName="px-0 sm:px-0"
+              >
+                <div className="px-5 sm:px-6">
                   <TemplateShowcase
                     templates={modeTemplates}
                     installedKey={document.templateId ?? null}
@@ -963,22 +885,40 @@ function SetupWizard({
                       secondary:
                         track?.accent.secondary ?? flow.accent.secondary,
                     }}
-                    onInstall={(key) => void installTemplate(key)}
+                    onInstall={installTemplate}
                     onContinue={advance}
+                    onCustomize={async (templateKey) => {
+                      // The palette edits the *draft*. If the draft predates
+                      // (or never wore) the showcased template, install it
+                      // first so the palette never styles a stale document.
+                      if (document.templateId !== templateKey) {
+                        const ok = await installTemplate(templateKey);
+                        if (!ok) return; // install failed — error is surfaced, stay put
+                      }
+                      goTo("style");
+                    }}
                   />
                 </div>
-              </Panel>
+              </StepCard>
             ) : null}
 
             {step === "style" ? (
-              <Panel className="p-5 sm:p-6">
-                <StepHeading
-                  step={stepProgress(stepIndex, steps.length)}
-                  title={flow.paletteTitle}
-                  description={flow.paletteHint}
-                  accent={flow.accent.primary}
-                />
-                <div className="mt-5">
+              <StepCard
+                step={stepProgress(stepIndex, steps.length)}
+                title={flow.paletteTitle}
+                description={flow.paletteHint}
+                accent={flow.accent.primary}
+                footer={
+                  <ContinueButton
+                    label="Review everything"
+                    busy={busy === "save"}
+                    disabled={blocked}
+                    accent={flow.accent}
+                    onClick={() => void advanceWithSave()}
+                  />
+                }
+              >
+                <div className="py-2">
                   <PaletteStudio
                     tokens={tokens}
                     onChange={applyPatch}
@@ -990,55 +930,47 @@ function SetupWizard({
                     }}
                   />
                 </div>
-                <div className="mt-6 flex justify-center">
-                  <ContinueButton
-                    label="Review everything"
-                    busy={busy === "save"}
-                    disabled={blocked}
-                    accent={flow.accent}
-                    onClick={() => void advanceWithSave()}
-                  />
-                </div>
-              </Panel>
+              </StepCard>
             ) : null}
 
             {step === "review" ? (
-              <ReviewSummary
-                flow={flow}
-                origin={origin}
-                track={track}
-                levels={levels}
-                enabledFeatures={
-                  track?.features?.filter((feature) =>
-                    features.includes(feature.key),
-                  ) ?? []
-                }
-                detailFields={detailFields}
-                tokens={tokens}
-                manifest={manifest}
-                templateName={document.templateId}
-                paletteSource={paletteSource}
-                busy={
-                  busy === "save"
-                    ? "save"
-                    : busy === "publish"
-                      ? "publish"
-                      : null
-                }
-                onBack={back}
-                onOpenStudio={() => router.push(`/studio/${projectId}`)}
-                onSaveDraft={() => void saveDraftAndOpen()}
-                onPublish={() => void publishAndOpen()}
-                onPickPreset={(presetTokens) => applyPatch(presetTokens)}
-              />
+              <StepCard
+                className="h-auto lg:h-[min(80svh,780px)]"
+                contentClassName="px-5 py-5 sm:px-6"
+              >
+                <ReviewSummary
+                  flow={flow}
+                  origin={origin}
+                  track={track}
+                  enabledFeatures={
+                    track?.features?.filter((feature) =>
+                      features.includes(feature.key),
+                    ) ?? []
+                  }
+                  detailFields={detailFields}
+                  tokens={tokens}
+                  manifest={manifest}
+                  templateName={templateKeyLabel(document.templateId)}
+                  paletteSource={paletteSource}
+                  busy={busy === "save" ? "save" : null}
+                  onBack={back}
+                  onOpenStudio={() => void saveDraftAndOpen()}
+                />
+              </StepCard>
             ) : null}
           </motion.div>
         </AnimatePresence>
       </div>
 
+      {/* Mode mark — pinned to the bottom-left corner of the page itself,
+          quietly orbiting behind every step card. */}
+      <div className="pointer-events-none absolute bottom-3 left-4 z-[5] hidden w-44 xl:block 2xl:w-56">
+        <ModeHeroGlyph flow={flow} />
+      </div>
+
       {/* Footer note */}
-      <footer className="relative z-10 pb-6 pt-2 text-center">
-        <p className="text-[10px] text-[var(--color-ink-faint)]">
+      <footer className="relative z-10 pb-4 pt-1 text-center">
+        <p className="text-[10px] text-(--color-ink-faint)">
           Applying changes replaces the draft only · Your live site keeps
           serving the current version.
         </p>
@@ -1049,44 +981,79 @@ function SetupWizard({
 
 // ─── Welcome card ────────────────────────────────────────────────────────────
 
+/** The welcome animation, per workspace family: studying for education,
+ *  teamwork for the NGO/organisation path. Other modes share the education
+ *  reel — add a new public asset per family as they land. */
+const WELCOME_LOTTIE: Partial<Record<WorkspaceMode, string>> = {
+  EDUCATION: "/study.lottie",
+  NON_PROFIT: "/team.lottie",
+};
+
+function welcomeLottie(mode: WorkspaceMode): string {
+  return WELCOME_LOTTIE[mode] ?? "/Education.lottie";
+}
+
 function WelcomeCard({
   flow,
   spine,
   busy,
   templateId,
   onContinue,
-  onOpenStudio,
 }: {
   flow: ModeFlow;
   spine: { id: StepId; label: string; icon: FlowIcon }[];
   busy: boolean;
   templateId: string;
   onContinue: () => void;
-  onOpenStudio: () => void;
 }) {
   const questions = spine.filter(
     (entry) => entry.id !== "welcome" && entry.id !== "review",
   );
 
   return (
-    <Panel className="p-6 sm:p-8" sweep>
-      <div className="grid items-center gap-6 sm:grid-cols-[0.85fr_1.15fr]">
-        <div className="relative mx-auto w-full max-w-sm">
-          <ModeHeroGlyph flow={flow} />
+    <StepCard
+      className="lg:h-[min(78svh,760px)]"
+      contentClassName="px-5 py-6 sm:px-8"
+      footer={
+        <div className="flex justify-center">
+          <ContinueButton
+            label="Start commissioning"
+            hint="Takes about two minutes. Every answer is saved as you go."
+            busy={busy}
+            accent={flow.accent}
+            onClick={onContinue}
+          />
         </div>
+      }
+    >
+      <div className="grid items-center gap-6 sm:grid-cols-[0.85fr_1.15fr]">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.94 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="relative mx-auto flex justify-center items-center aspect-square w-full max-w-sm "
+        >
+          <DotLottieReact
+            key={welcomeLottie(flow.key)}
+            src={welcomeLottie(flow.key)}
+            autoplay
+            loop
+            className="scale-180"
+          />
+        </motion.div>
 
         <div>
           <motion.div
             initial={{ opacity: 0, x: -8 }}
             animate={{ opacity: 1, x: 0 }}
-            className="inline-flex items-center gap-2 rounded-full border border-[var(--color-line)] bg-[var(--color-panel-2)] px-2.5 py-1"
+            className="inline-flex items-center gap-2 rounded-full border border-(--color-line) bg-(--color-panel-2) px-2.5 py-1"
           >
             <FlowGlyph
               name={flow.icon}
               size={13}
               style={{ color: flow.accent.primary }}
             />
-            <span className="text-[10px] uppercase tracking-[0.22em] text-[var(--color-ink-faint)]">
+            <span className="text-[10px] uppercase tracking-[0.22em] text-(--color-ink-faint)">
               {flow.osName}
             </span>
           </motion.div>
@@ -1104,7 +1071,7 @@ function WelcomeCard({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="mt-2 text-[12.5px] leading-relaxed text-[var(--color-ink-dim)]"
+            className="mt-2 text-[12.5px] sm:text-sm max-w-lg leading-relaxed text-(--color-ink-dim)"
           >
             {flow.brandTagline}
           </motion.p>
@@ -1116,14 +1083,14 @@ function WelcomeCard({
             transition={{ delay: 0.16 }}
             className="mt-5"
           >
-            <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-(--color-ink-faint)">
               {questions.length} questions, in this order
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {questions.map((entry) => (
                 <span
                   key={entry.id}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-line)] px-2.5 py-1 text-[10.5px] text-[var(--color-ink-dim)]"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-(--color-line) px-2.5 py-1 text-[10.5px] text-[var(--color-ink-dim)]"
                 >
                   <FlowGlyph
                     name={entry.icon}
@@ -1134,60 +1101,56 @@ function WelcomeCard({
                 </span>
               ))}
             </div>
-            <p className="mt-2 text-[10.5px] leading-relaxed text-[var(--color-ink-faint)]">
+            <p className="mt-2 text-[10.5px] leading-relaxed text-(--color-ink-faint)">
               {templateId
-                ? `Your draft currently builds on the “${templateId}” template — you will get to change that.`
+                ? `Your draft currently builds on the “${templateKeyLabel(templateId)}” template — you will get to change that.`
                 : "Nothing you answer is locked in: every card can be revisited from the progress bar."}
             </p>
           </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            className="mt-7"
-          >
-            <ContinueButton
-              label="Start commissioning"
-              hint="Takes about two minutes. Every answer is saved as you go."
-              busy={busy}
-              accent={flow.accent}
-              onClick={onContinue}
-            />
-          </motion.div>
-
-          <button
-            type="button"
-            onClick={onOpenStudio}
-            className="focus-ring mt-4 block w-full text-[11px] text-[var(--color-ink-faint)] underline-offset-2 hover:underline"
-          >
-            Skip — open the Studio directly
-          </button>
         </div>
       </div>
-    </Panel>
+    </StepCard>
   );
 }
 
 /** Stable component wrapper so the compiler never sees a component being
  *  constructed inside render — the shared FlowGlyph in the icon bridge owns
- *  the lookup; this thin alias is only legacy compatibility. */
+ *  the lookup; this thin alias is only legacy compatibility. The mark lives at
+ *  the bottom-left corner of the setup page now, not inside the welcome card:
+ *  the tile lost its fill — the mode's gradient paints the icon's stroke. */
 function ModeHeroGlyph({ flow }: { flow: ModeFlow }) {
+  const gradId = "mode-hero-grad";
+
   return (
-    <div className="relative mx-auto aspect-square w-full max-w-[280px]">
+    <div className="relative aspect-square w-full">
+      {/* A shared gradient definition the icon's stroke references. */}
+      <svg
+        aria-hidden
+        focusable="false"
+        className="absolute left-0 top-0 h-0 w-0"
+      >
+        <defs>
+          <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor={flow.accent.primary} />
+            <stop offset="100%" stopColor={flow.accent.secondary} />
+          </linearGradient>
+        </defs>
+      </svg>
       <div
-        className="pulse-ring absolute inset-0 rounded-[34px]"
-        style={{
-          background: `linear-gradient(135deg, ${flow.accent.primary}, ${flow.accent.secondary})`,
-          color: flow.accent.secondary,
-        }}
+        className="surface-glass pulse-ring absolute inset-0 items-center not-first-of-type:justify-center my-auto h-full bg-transparent! rounded-full"
+        style={{ color: flow.accent.secondary }}
       >
         <motion.div
-          className="float-slow flex h-full w-full items-center justify-center text-white/95"
+          className="float-slow flex h-full w-full items-center justify-center bg-transparent!"
           animate={{ scale: [1, 1.04, 1] }}
           transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
         >
-          <FlowGlyph name={flow.icon} size={92} strokeWidth={1.1} />
+          <FlowGlyph
+            name={flow.icon}
+            size={96}
+            strokeWidth={1.2}
+            color={`url(#${gradId})`}
+          />
         </motion.div>
       </div>
       {/* Orbit dashes */}

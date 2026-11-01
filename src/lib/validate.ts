@@ -104,9 +104,22 @@ const SEMANTIC: Record<string, (value: string | number) => string | null> = {
   ogImage: (value) => {
     const text = String(value);
     if (text.length > 2048) return 'Share image URL is too long.';
+    if (text === '') return null;
     return TOKEN_URL_VALUE.test(text)
       ? null
       : 'Share image must be an https:// URL or root-relative path.';
+  },
+
+  // Brand logo shown in portal navigation, auth screens and the footer. Same
+  // transport rule as `ogImage` — https:// or root-relative, never data:. Kept
+  // in lockstep with the backend's `logoUrl` validator in token-schema.ts.
+  logoUrl: (value) => {
+    const text = String(value);
+    if (text.length > 2048) return 'Logo URL is too long.';
+    if (text === '') return null;
+    return TOKEN_URL_VALUE.test(text)
+      ? null
+      : 'Logo URL must be an https:// URL or root-relative path.';
   },
 
   locale: (value) =>

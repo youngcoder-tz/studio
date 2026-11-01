@@ -1,4 +1,8 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
 
 :root {
   color-scheme: light;
@@ -14,6 +18,10 @@
     rgba(255, 255, 255, 0.9) 0%,
     rgba(248, 250, 252, 0.82) 100%
   );
+  /* Opaque backing under --color-panel, for overlays that must never show
+     the page through them (sheets). Tailwind can't derive a type from a bare
+     var() color class, so overlays layer it via inline style: color under image. */
+  --color-panel-solid: #ffffff;
   --color-panel-2: linear-gradient(
     180deg,
     rgba(255, 255, 255, 0.98) 0%,
@@ -42,6 +50,46 @@
     transparent
   );
   --blur-panel: blur(18px) saturate(120%);
+  /* shadcn tokens, tuned to the Studio design language: soft, translucent, indigo. */
+  --background: #f7f7f9;
+  --foreground: #1b1d24;
+  --card: #ffffffcc;
+  --card-foreground: #1b1d24;
+  --popover: #fbfbfd;
+  --popover-foreground: #1b1d24;
+  --primary: #4f46e5;
+  --primary-foreground: #ffffff;
+  --secondary: #0000000a;
+  --secondary-foreground: #1b1d24;
+  --muted: #0000000a;
+  --muted-foreground: #6b7080;
+  --accent: #0000000c;
+  --accent-foreground: #1b1d24;
+  --destructive: #ef4444;
+  --border: #0000000f;
+  --input: #0000000f;
+  --ring: #4f46e5;
+  --chart-1: #4f46e5;
+  --chart-2: #0ea5e9;
+  --chart-3: #10b981;
+  --chart-4: #f59e0b;
+  --chart-5: #ec4899;
+  --radius: 0.875rem;
+  --sidebar: #ffffffcc;
+  --sidebar-foreground: #1b1d24;
+  --sidebar-primary: #4f46e5;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #4f46e51a;
+  --sidebar-accent-foreground: #4f46e5;
+  --sidebar-border: #0000000f;
+  --sidebar-ring: #4f46e5;
+  /* Soft-UI extras */
+  --soft: #0000000a;
+  --hover: #0000000c;
+  --active: #4f46e51a;
+  --brand-text: #4f46e5;
+  --success: #16a34a;
+  --warning: #d97706;
 }
 
 :root.dark {
@@ -60,6 +108,7 @@
       rgba(25, 28, 58, 0.92) 0%,
       rgba(16, 18, 38, 0.88) 100%
     );
+  --color-panel-solid: #191c38;
   --color-panel-2:
     radial-gradient(700px 220px at top, rgba(99, 102, 241, 0.16), transparent),
     linear-gradient(
@@ -92,9 +141,140 @@
   --blur-panel: blur(22px) saturate(130%);
 }
 
-* {
-  border-color: var(--color-line);
+
+/* GN-Apex Studio design language: soft, layered, theme-aware surfaces.
+   Every --studio-* token is an alias of a shadcn variable, so the whole studio
+   follows one source of truth and flips with .dark automatically. */
+:root {
+  --studio-bg: var(--background);
+  --studio-canvas: var(--background);
+  --studio-surface: var(--card);
+  --studio-surface-strong: var(--popover);
+  --studio-subtle: var(--soft);
+  --studio-rail: var(--card);
+  --studio-border: var(--border);
+  --studio-ink: var(--foreground);
+  --studio-ink-muted: var(--muted-foreground);
+  --studio-ink-faint: color-mix(in srgb, var(--muted-foreground) 78%, transparent);
+  --studio-accent: var(--brand-text);
+  --studio-accent-soft: var(--active);
+  --studio-accent-foreground: var(--primary-foreground);
+  --studio-success: var(--success);
 }
+
+.studio-glow {
+  background:
+    radial-gradient(600px 300px at 20% -10%, color-mix(in srgb, var(--primary) 14%, transparent), transparent),
+    radial-gradient(500px 300px at 100% 100%, color-mix(in srgb, var(--primary) 8%, transparent), transparent);
+}
+.studio-dotgrid {
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+.studio-glass {
+  background: var(--card);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+.studio-scroll { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+/* the mockup's soft floating popup: translucent card, hairline border, deep
+   diffused shadow, 120ms scale-in (its `.cm` entrance). Use for chrome that
+   has no competing framer-motion transform. */
+@keyframes studio-pop-in { from { opacity: 0; transform: scale(0.97); } }
+.studio-popover {
+  background: var(--popover);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 18px 50px -12px rgb(0 0 0 / 0.35);
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+}
+.studio-popover-lift { animation: studio-pop-in 0.12s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .studio-popover-lift { animation: none !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-motion { animation: none !important; transition: none !important; }
+}
+
+/* Studio "reduce motion" preference (Settings station). */
+[data-studio-motion='off'] *,
+[data-studio-motion='off'] *::before,
+[data-studio-motion='off'] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+.studio-action {
+  display: inline-flex; align-items: center; gap: .45rem; min-height: 30px;
+  border: 1px solid var(--border); border-radius: 10px; padding: .35rem .7rem;
+  background: var(--soft); color: var(--foreground); font-size: 12px; font-weight: 500;
+  transition: background .15s, border-color .15s;
+}
+.studio-action:hover { background: var(--hover); }
+.studio-action-primary { background: var(--primary); color: var(--primary-foreground); border-color: transparent; }
+.studio-action-primary:hover { background: var(--primary); filter: brightness(1.08); }
+.studio-list-row {
+  display: flex; align-items: center; gap: .55rem; min-height: 34px; border-radius: 9px;
+  padding: .35rem .55rem; color: var(--foreground); transition: background .15s;
+}
+.studio-list-row:hover { background: var(--hover); }
+.studio-list-row-active { color: var(--brand-text); background: var(--active); }
+.studio-rail-button {
+  position: relative; display: flex; width: 40px; height: 40px; align-items: center; justify-content: center;
+  border-radius: 12px; color: var(--muted-foreground); transition: background .15s, color .15s, box-shadow .15s;
+}
+.studio-rail-button:hover { background: var(--hover); color: var(--foreground); }
+.studio-rail-button-active {
+  color: var(--brand-text); background: var(--active);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-text) 30%, transparent);
+}
+.studio-rail-button-active::before {
+  content: ''; position: absolute; left: -7px; top: 50%; width: 3px; height: 18px;
+  transform: translateY(-50%); border-radius: 999px;
+  background: linear-gradient(180deg, var(--brand-text), transparent);
+}
+
+/* Reference design language ("Studio · Pages"): soft, minimal, glass. */
+.studio-chip {
+  display: inline-flex; align-items: center; gap: .3rem;
+  border-radius: 8px; padding: 2px 7px;
+  font-size: 11px; line-height: 1.4;
+  background: var(--soft); color: var(--muted-foreground);
+}
+.studio-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+  transition: transform .15s, border-color .15s, box-shadow .15s;
+}
+.studio-card:hover {
+  border-color: color-mix(in srgb, var(--primary) 45%, transparent);
+  transform: translateY(-1px);
+}
+.studio-soft-input {
+  width: 100%; border-radius: 9px; padding: 6px 10px; font-size: 12.5px; outline: none;
+  background: var(--soft); color: var(--foreground); border: 1px solid transparent;
+  transition: border-color .15s, background .15s;
+}
+.studio-soft-input::placeholder { color: var(--muted-foreground); }
+.studio-soft-input:focus-visible { border-color: color-mix(in srgb, var(--primary) 55%, transparent); }
+.studio-seg { display: flex; gap: 2px; padding: 2px; border-radius: 10px; background: var(--soft); }
+.studio-seg > button {
+  padding: 4px 10px; border-radius: 8px; font-size: 12px; font-weight: 500;
+  color: var(--muted-foreground); transition: background .15s, color .15s; white-space: nowrap;
+}
+.studio-seg > button:hover { color: var(--foreground); }
+.studio-seg > button[data-active='true'] { background: var(--active); color: var(--brand-text); }
+.studio-tip {
+  position: absolute; left: calc(100% + 12px); white-space: nowrap;
+  background: var(--foreground); color: var(--background);
+  padding: 3px 8px; border-radius: 7px; font-size: 11px;
+  opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 50;
+}
+.group:hover > .studio-tip, .studio-rail-button:hover > .studio-tip { opacity: 1; }
+
+/* (legacy unlayered `* { border-color }` removed: it overrode every shadcn border utility) */
 
 html,
 body {
@@ -201,6 +381,47 @@ body {
   );
   background-size: 200% 100%;
   animation: shimmer 2.4s ease-in-out infinite;
+}
+
+/* Boot skeleton: the shadcn Skeleton primitive, upgraded with one restrained
+   neutral sweep. The base surface is --soft, so it reads correctly in both
+   themes; the highlight uses the foreground, never a fixed blue. */
+.studio-skeleton {
+  position: relative;
+  overflow: hidden;
+}
+
+.studio-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--foreground) 9%, transparent) 50%,
+    transparent 100%
+  );
+  animation: studio-skeleton-sweep 1.9s ease-in-out infinite;
+}
+
+@keyframes studio-skeleton-sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-skeleton::after {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+[data-studio-motion="off"] .studio-skeleton::after {
+  animation: none;
+  opacity: 0;
 }
 
 /* ─── Cinematic setup layer ────────────────────────────────────────────────── */
@@ -417,6 +638,43 @@ body {
   animation: sector-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* The wizard's step-card body: a quiet, slim scrollbar that only appears
+   while scrolling, so the fixed-height stage stays clean. */
+.step-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--color-ink-faint) 35%, transparent)
+    transparent;
+}
+.step-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+.step-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.step-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--color-ink-faint) 35%, transparent);
+  border-radius: 999px;
+}
+
+/* The cause shelf's own scroll playground: same quiet scrollbar, plus extra
+   run-out padding so the last row never sits flush against the fade mask. */
+.shelf-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--color-ink-faint) 35%, transparent)
+    transparent;
+  scroll-padding-block: 0.5rem;
+}
+.shelf-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+.shelf-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.shelf-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--color-ink-faint) 35%, transparent);
+  border-radius: 999px;
+}
+
 .grid-veil {
   background-image:
     linear-gradient(
@@ -473,5 +731,106 @@ body {
   .breathe-slow,
   .roll-slow {
     animation: none !important;
+  }
+}
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: var(--font-sans);
+  --color-soft: var(--soft);
+  --color-hover: var(--hover);
+  --color-active: var(--active);
+  --color-brand-text: var(--brand-text);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+.dark {
+  --background: #0c0d11;
+  --foreground: #e9eaf0;
+  --card: #14161cd9;
+  --card-foreground: #e9eaf0;
+  --popover: #101218;
+  --popover-foreground: #e9eaf0;
+  --primary: #4f46e5;
+  --primary-foreground: #ffffff;
+  --secondary: #ffffff0a;
+  --secondary-foreground: #e9eaf0;
+  --muted: #ffffff0a;
+  --muted-foreground: #8a90a2;
+  --accent: #ffffff0d;
+  --accent-foreground: #e9eaf0;
+  --destructive: #f87171;
+  --border: #ffffff12;
+  --input: #ffffff12;
+  --ring: #818cf8;
+  --chart-1: #818cf8;
+  --chart-2: #38bdf8;
+  --chart-3: #34d399;
+  --chart-4: #fbbf24;
+  --chart-5: #f472b6;
+  --sidebar: #14161cd9;
+  --sidebar-foreground: #e9eaf0;
+  --sidebar-primary: #818cf8;
+  --sidebar-primary-foreground: #0c0d11;
+  --sidebar-accent: #818cf826;
+  --sidebar-accent-foreground: #a5b4fc;
+  --sidebar-border: #ffffff12;
+  --sidebar-ring: #818cf8;
+  --soft: #ffffff0a;
+  --hover: #ffffff0d;
+  --active: #818cf826;
+  --brand-text: #a5b4fc;
+  --success: #34d399;
+  --warning: #fbbf24;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
   }
 }

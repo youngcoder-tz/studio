@@ -11,16 +11,21 @@
 
 import { createElement } from 'react';
 import {
+  Accessibility,
   Award,
   BadgeCheck,
+  Baby,
   Bed,
   Bird,
   BookOpen,
   Building2,
   Bus,
   CalendarDays,
+  Coins,
   Compass,
   Contrast,
+  Dumbbell,
+  Flower2,
   Globe,
   GraduationCap,
   HandCoins,
@@ -32,6 +37,7 @@ import {
   IdCard,
   Images,
   Landmark,
+  Laptop,
   Languages,
   Layers,
   Library,
@@ -40,18 +46,25 @@ import {
   MonitorPlay,
   Moon,
   Network,
+  Newspaper,
   Palette,
+  PawPrint,
+  Plane,
   Presentation,
   Puzzle,
   Repeat,
+  Scale,
   School,
   ScrollText,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
+  Sprout,
   Store,
+  Sunrise,
   Target,
   TreePine,
+  Tent,
   Type,
   Utensils,
   Users,
@@ -93,6 +106,20 @@ const REGISTRY: Record<FlowIcon, LucideIcon> = {
   'hand-heart': HandHeart,
   dove: Bird,
   building: Building2,
+  // Sector vocabulary
+  newspaper: Newspaper,
+  plane: Plane,
+  flower: Flower2,
+  baby: Baby,
+  sprout: Sprout,
+  coins: Coins,
+  access: Accessibility,
+  scale: Scale,
+  tent: Tent,
+  paw: PawPrint,
+  laptop: Laptop,
+  dumbbell: Dumbbell,
+  sunrise: Sunrise,
   // Setup-step vocabulary
   cap: GraduationCap,
   palette: Palette,
@@ -117,13 +144,24 @@ export interface GlyphProps {
   className?: string;
   style?: React.CSSProperties;
   strokeWidth?: number;
+  /** Paints the icon's stroke — a plain colour or an SVG paint URL such as
+   *  `url(#gradient-id)`. */
+  color?: string;
   'aria-hidden'?: boolean;
 }
 
 export function FlowGlyph(props: GlyphProps): React.ReactElement {
-  const { name, size = 16, className, style, strokeWidth, 'aria-hidden': ariaHidden } = props;
+  const {
+    name,
+    size = 16,
+    className,
+    style,
+    strokeWidth,
+    color,
+    'aria-hidden': ariaHidden,
+  } = props;
   const Icon = REGISTRY[name] ?? Sparkles;
-  return createElement(Icon, { size, className, style, strokeWidth, 'aria-hidden': ariaHidden });
+  return createElement(Icon, { size, className, style, strokeWidth, color, 'aria-hidden': ariaHidden });
 }
 
 /** Non-component helper: raw lookup for places that need the type itself. */

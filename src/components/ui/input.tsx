@@ -50,3 +50,19 @@ export function Field({
     </div>
   );
 }
+
+/* ── shadcn-style Input / Textarea (soft studio look, follows shadcn variables) ── */
+const softField =
+  'w-full rounded-[10px] border border-border bg-secondary px-2.5 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus-visible:border-primary/50 focus-visible:ring-3 focus-visible:ring-primary/15 disabled:cursor-not-allowed disabled:opacity-50';
+
+export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
+  function Input({ className, type = 'text', ...props }, ref) {
+    return <input ref={ref} type={type} data-slot="input" {...props} className={cn(softField, 'h-8', className)} />;
+  },
+);
+
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(
+  function Textarea({ className, ...props }, ref) {
+    return <textarea ref={ref} data-slot="textarea" {...props} className={cn(softField, 'min-h-16 resize-none py-1.5 leading-relaxed', className)} />;
+  },
+);

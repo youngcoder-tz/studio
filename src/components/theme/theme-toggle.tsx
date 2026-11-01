@@ -10,10 +10,11 @@ const options = [
   { value: 'dark', icon: Moon, label: 'Dark' },
 ] as const;
 
+/** Soft segmented theme switch: light, system, dark. Uses shadcn variables only. */
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
   return (
-    <div className="relative flex items-center gap-1 rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-soft)]">
+    <div role="radiogroup" aria-label="Theme" className="inline-flex items-center gap-0.5 rounded-[10px] border border-border bg-secondary p-0.5">
       {options.map((option) => {
         const active = theme === option.value;
         const Icon = option.icon;
@@ -21,20 +22,17 @@ export function ThemeToggle() {
           <button
             key={option.value}
             type="button"
+            role="radio"
+            aria-checked={active}
             onClick={() => setTheme(option.value)}
-            className={cn(
-              'focus-ring relative flex h-7 w-7 items-center justify-center rounded-full transition-all duration-200',
-              active
-                ? 'text-[var(--color-accent-foreground)]'
-                : 'text-[var(--color-ink-faint)] hover:text-[var(--color-ink-dim)]',
-            )}
             aria-label={option.label}
             title={option.label}
+            className={cn(
+              'flex size-6 items-center justify-center rounded-lg outline-none transition-colors focus-visible:ring-3 focus-visible:ring-primary/30',
+              active ? 'bg-primary/10 text-primary dark:text-brand-text' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+            )}
           >
-            {active ? (
-              <span className="absolute inset-0 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[color-mix(in_oklab,var(--color-accent)_70%,#312e81)] shadow-[0_10px_40px_-18px_var(--color-accent-glow)]" />
-            ) : null}
-            <Icon size={14} className="relative" />
+            <Icon className="size-3.5" />
           </button>
         );
       })}

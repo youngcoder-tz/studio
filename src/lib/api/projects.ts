@@ -20,6 +20,8 @@ export interface StudioProject {
   organization?: { id: string; name: string } | null;
   teamAccess?: { role: string }[];
   updatedAt?: string;
+  profile?: { logoUrl?: string | null } | null;
+  logoUrl?: string | null;
 }
 
 export function fetchProjects(): Promise<StudioProject[]> {

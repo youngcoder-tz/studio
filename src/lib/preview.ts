@@ -1,39 +1,88 @@
 // studio/src/lib/preview.ts
 //
-// PREVIEW PATH RESOLUTION.
+// PREVIEW PATH RESOLUTION FOR WORKSPACE ERP SURFACES.
 //
-// The portal runtime (`NexusPortalPage` in the client SDK) derives the page key
-// from the pathname *after* `/portal/`, falling back to `home`. The Studio has to
-// produce paths that resolve back to the same key, or the preview shows the
-// wrong page — a genuinely confusing failure, because the page list and the
-// preview would disagree while both looking correct in isolation.
-//
-// Kept as a function rather than inlined so there is exactly one place that
-// knows the portal's URL convention.
+// Maps the canonical page keys (from WORKSPACE_PAGE_CATALOG) to their actual
+// Next.js ERP routes in the live portal runtime.
 
-export const DEFAULT_PAGE_KEY_FALLBACK = 'home';
+export const DEFAULT_PAGE_KEY_FALLBACK = "auth-login";
 
-const PORTAL_BASE_PATH = '/portal';
+const PORTAL_BASE_PATH = "/portal";
 
 /**
- * The portal path for a page key.
- *
- * `home` maps to `/portal` (no trailing segment) because that is the route the
- * portal templates actually serve, and `/portal/home` would be a 404 on a
- * conventional Next.js app. Every other key maps to `/portal/<key>`.
+ * Explicit route map for managed ERP surfaces.
+ * This guarantees the iframe loads the exact page rather than 404ing on a naive slug.
+ */
+const MANAGED_ROUTE_MAP: Record<string, string> = {
+  // ── Authentication ──
+  "auth-login": "/portal/login",
+  "auth-forgot-password": "/portal/forgot-password",
+  "auth-reset-password": "/portal/reset-password",
+
+  // ── Public Utilities (Injected into Live Website) ──
+  "public-bus-tracking": "/utilities/track-bus",
+  "public-result-verify": "/utilities/verify-result",
+  "public-admissions-apply": "/admissions/apply",
+  "public-admissions-track": "/admissions/track",
+  "public-donate-checkout": "/donate",
+  "public-campaign-progress": "/campaigns/progress",
+  "public-donor-wall": "/donors",
+  "public-volunteer-apply": "/volunteer/apply",
+  checkout: "/checkout",
+
+  // ── Student Portal ──
+  "portal-student-dashboard": "/portal/student",
+  "portal-student-results": "/portal/student/results",
+  "portal-student-fees": "/portal/student/fees",
+  "portal-student-timetable": "/portal/student/timetable",
+  "portal-student-attendance": "/portal/student/attendance",
+
+  // ── Parent Portal ──
+  "portal-parent-dashboard": "/portal/parent",
+
+  // ── Staff Portal ──
+  "portal-staff-dashboard": "/portal/staff",
+
+  // ── Contributor / Member Portals ──
+  "portal-donor-giving": "/portal/donor",
+  "portal-volunteer-tasks": "/portal/volunteer",
+  "portal-orders": "/portal/orders",
+  "portal-client-dashboard": "/portal",
+  "portal-partner-dashboard": "/portal/partner",
+};
+
+/**
+ * Returns the exact preview path for a given page key.
  */
 export function previewPathFor(pageKey: string): string {
-  if (!pageKey || pageKey === DEFAULT_PAGE_KEY_FALLBACK) return PORTAL_BASE_PATH;
+  if (!pageKey)
+    return MANAGED_ROUTE_MAP[DEFAULT_PAGE_KEY_FALLBACK] || "/portal/login";
+
+  if (MANAGED_ROUTE_MAP[pageKey]) {
+    return MANAGED_ROUTE_MAP[pageKey];
+  }
+
+  // Fallback pattern for any newly created custom page key
+  if (pageKey.startsWith("/")) return pageKey;
   return `${PORTAL_BASE_PATH}/${pageKey}`;
 }
 
 /**
- * The inverse: the page key a portal path resolves to. Used to reconcile the
- * Studio's active page when the preview is opened directly at a deep link.
+ * Inverse: Maps a browser URL pathname back into the canonical Studio page key.
  */
 export function pageKeyFromPreviewPath(pathname: string): string {
-  if (!pathname.startsWith(PORTAL_BASE_PATH)) return DEFAULT_PAGE_KEY_FALLBACK;
-  const rest = pathname.slice(PORTAL_BASE_PATH.length).replace(/^\/+/, '');
-  const [segment] = rest.split(/[/?#]/);
-  return segment || DEFAULT_PAGE_KEY_FALLBACK;
+  const clean = pathname.split(/[?#]/)[0].replace(/\/$/, "");
+
+  for (const [key, route] of Object.entries(MANAGED_ROUTE_MAP)) {
+    if (clean === route || clean === `${route}/`) {
+      return key;
+    }
+  }
+
+  if (clean.startsWith(PORTAL_BASE_PATH)) {
+    const segment = clean.slice(PORTAL_BASE_PATH.length).replace(/^\/+/, "");
+    return segment || DEFAULT_PAGE_KEY_FALLBACK;
+  }
+
+  return DEFAULT_PAGE_KEY_FALLBACK;
 }

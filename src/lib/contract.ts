@@ -2,43 +2,30 @@
 //
 // THE STUDIO'S COPY OF THE BACKEND CONTRACT.
 //
-// Every type here is a mirror of something the backend already owns:
-//
+// Every type here is a direct mirror of the backend control plane:
 //   • manifest shapes   ← backend/src/workspace/registry/component-manifest.registry.ts
 //   • operation shapes  ← backend/src/workspace/registry/operations.ts
 //   • document shapes   ← backend/src/workspace/registry/layout-schema.ts
 //   • read-model shapes ← backend/src/workspace/workspace.service.ts
-//
-// It is duplicated rather than imported because the Studio is a standalone
-// project with no build-time dependency on the backend's TS source (the backend
-// is a NestJS app; importing its Zod-kernel modules into a Next.js bundle would
-// drag Prisma and @nestjs/* into the browser). The duplication is deliberate and
-// bounded:
-//
-//   • Anything the backend can *reject* is validated by the backend. The types
-//     here only need to be good enough to render a form and build a request.
-//   • Anything the Studio *mis-shapes* fails loudly at the API boundary with a
-//     compiler diagnostic naming the field, which the UI surfaces inline.
-//
-// So a drift here produces a visible error, never silent corruption.
+//   • catalog shapes    ← backend/src/workspace/workspace.constants.ts
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WORKSPACE MODES
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type WorkspaceMode =
-  | 'GENERAL'
-  | 'E_COMMERCE'
-  | 'NON_PROFIT'
-  | 'EDUCATION'
-  | 'PARTNER';
+  | "GENERAL"
+  | "E_COMMERCE"
+  | "NON_PROFIT"
+  | "EDUCATION"
+  | "PARTNER";
 
 export const WORKSPACE_MODE_LABELS: Record<WorkspaceMode, string> = {
-  GENERAL: 'General',
-  E_COMMERCE: 'E-Commerce',
-  NON_PROFIT: 'Non-Profit / NGO',
-  EDUCATION: 'Education',
-  PARTNER: 'Partner',
+  GENERAL: "General",
+  E_COMMERCE: "E-Commerce",
+  NON_PROFIT: "Non-Profit / NGO",
+  EDUCATION: "Education",
+  PARTNER: "Partner",
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -48,115 +35,123 @@ export const WORKSPACE_MODE_LABELS: Record<WorkspaceMode, string> = {
 export type TokenValue = string | number;
 export type GlobalTokens = Record<string, TokenValue>;
 
-/**
- * A token key/value pair as the inspector sees it. `origin` records whether the
- * value was authored in this project or inherited from the template's defaults,
- * which is what lets the UI offer an accurate "reset to inherited" action.
- */
 export interface TokenRow {
   key: string;
   value: TokenValue;
-  origin: 'authored' | 'inherited';
-  /** Present when `key` is a recognised token with a stricter validator. */
+  origin: "authored" | "inherited";
   kind?: TokenKind;
 }
 
 export type TokenKind =
-  | 'color'
-  | 'font'
-  | 'length'
-  | 'radius'
-  | 'theme'
-  | 'direction'
-  | 'text'
-  | 'url'
-  | 'locale'
-  | 'currency'
-  | 'unknown';
+  | "color"
+  | "font"
+  | "length"
+  | "radius"
+  | "theme"
+  | "direction"
+  | "text"
+  | "url"
+  | "locale"
+  | "currency"
+  | "unknown";
 
-/**
- * The recognised tokens and their editor kind. Mirrors
- * backend/src/workspace/registry/token-schema.ts's CANONICAL_TOKEN_VALIDATORS.
- * Ordering here is the order the Studio renders the token panel in.
- */
 export const CANONICAL_TOKEN_KINDS: Record<string, TokenKind> = {
-  primaryColor: 'color',
-  secondaryColor: 'color',
-  accentColor: 'color',
-  backgroundColor: 'color',
-  surfaceColor: 'color',
-  textColor: 'color',
-  borderColor: 'color',
-  successColor: 'color',
-  warningColor: 'color',
-  dangerColor: 'color',
-  mutedTextColor: 'color',
+  primaryColor: "color",
+  secondaryColor: "color",
+  accentColor: "color",
+  backgroundColor: "color",
+  surfaceColor: "color",
+  textColor: "color",
+  borderColor: "color",
+  successColor: "color",
+  warningColor: "color",
+  dangerColor: "color",
+  mutedTextColor: "color",
 
-  fontHeading: 'font',
-  fontBody: 'font',
-  fontMono: 'font',
+  fontHeading: "font",
+  fontBody: "font",
+  fontMono: "font",
 
-  borderRadius: 'radius',
-  contentMaxWidth: 'length',
-  sectionSpacing: 'length',
-  gridGutter: 'length',
+  borderRadius: "radius",
+  contentMaxWidth: "length",
+  sectionSpacing: "length",
+  gridGutter: "length",
 
-  theme: 'theme',
-  direction: 'direction',
-  siteName: 'text',
-  tagline: 'text',
-  logoUrl: 'url',
-  ogImage: 'url',
-  locale: 'locale',
-  currency: 'currency',
+  theme: "theme",
+  direction: "direction",
+  siteName: "text",
+  tagline: "text",
+  logoUrl: "url",
+  ogImage: "url",
+  locale: "locale",
+  currency: "currency",
 };
 
-/** Token keys grouped for the panel, in render order. */
 export const TOKEN_GROUPS: { label: string; keys: string[] }[] = [
   {
-    label: 'Brand colours',
-    keys: ['primaryColor', 'secondaryColor', 'accentColor'],
+    label: "Brand colours",
+    keys: ["primaryColor", "secondaryColor", "accentColor"],
   },
   {
-    label: 'Surface & text',
+    label: "Surface & text",
     keys: [
-      'backgroundColor',
-      'surfaceColor',
-      'textColor',
-      'mutedTextColor',
-      'borderColor',
+      "backgroundColor",
+      "surfaceColor",
+      "textColor",
+      "mutedTextColor",
+      "borderColor",
     ],
   },
   {
-    label: 'Status',
-    keys: ['successColor', 'warningColor', 'dangerColor'],
+    label: "Status",
+    keys: ["successColor", "warningColor", "dangerColor"],
   },
   {
-    label: 'Typography',
-    keys: ['fontHeading', 'fontBody', 'fontMono'],
+    label: "Typography",
+    keys: ["fontHeading", "fontBody", "fontMono"],
   },
   {
-    label: 'Layout',
-    keys: ['borderRadius', 'contentMaxWidth', 'sectionSpacing', 'gridGutter'],
+    label: "Layout",
+    keys: ["borderRadius", "contentMaxWidth", "sectionSpacing", "gridGutter"],
   },
   {
-    label: 'Identity & locale',
-    keys: ['siteName', 'tagline', 'logoUrl', 'ogImage', 'theme', 'direction', 'locale', 'currency'],
+    label: "Identity & locale",
+    keys: [
+      "siteName",
+      "tagline",
+      "logoUrl",
+      "ogImage",
+      "theme",
+      "direction",
+      "locale",
+      "currency",
+    ],
   },
 ];
 
-export const BORDER_RADIUS_PRESETS = ['none', 'soft', 'rounded', 'pill'] as const;
+export const BORDER_RADIUS_PRESETS = [
+  "none",
+  "soft",
+  "rounded",
+  "pill",
+] as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LAYOUT INSTANCES
+// LAYOUT INSTANCES & METADATA
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type GridSpan = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
 
 export interface LayoutMeta {
   colSpan?: { mobile?: GridSpan; tablet?: GridSpan; desktop?: GridSpan };
-  surface?: 'flat' | 'elevated' | 'glassmorphic' | 'bordered' | 'gradient';
-  animation?: 'none' | 'fade-up' | 'fade-in' | 'slide-left' | 'slide-right' | 'zoom-in';
+  surface?: "flat" | "elevated" | "glassmorphic" | "bordered" | "gradient";
+  animation?:
+    | "none"
+    | "fade-up"
+    | "fade-in"
+    | "slide-left"
+    | "slide-right"
+    | "zoom-in";
   requiredRoles?: string[];
   hideOnMobile?: boolean;
   hideOnDesktop?: boolean;
@@ -170,7 +165,6 @@ export interface DataBinding {
 }
 
 export interface LayoutInstance {
-  /** Assigned client-side on insert; the backend accepts it verbatim. */
   instanceId?: string;
   componentId: string;
   props: Record<string, unknown>;
@@ -178,7 +172,6 @@ export interface LayoutInstance {
   binding?: DataBinding;
 }
 
-/** Flat, ordered. Nesting is positional, expressed via container components. */
 export type PageLayouts = Record<string, LayoutInstance[]>;
 
 export interface PageSeoConfig {
@@ -193,25 +186,25 @@ export interface PageSeoConfig {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MANIFESTS
+// MANIFESTS & RUNTIME METADATA
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type ManifestFieldType =
-  | 'TEXT'
-  | 'TEXT_LONG'
-  | 'RICH_TEXT'
-  | 'NUMBER'
-  | 'BOOLEAN'
-  | 'COLOR'
-  | 'SELECT'
-  | 'MULTI_SELECT'
-  | 'IMAGE'
-  | 'URL'
-  | 'DATE'
-  | 'LIST'
-  | 'KEY_VALUE'
-  | 'REFERENCE'
-  | 'CODE';
+  | "TEXT"
+  | "TEXT_LONG"
+  | "RICH_TEXT"
+  | "NUMBER"
+  | "BOOLEAN"
+  | "COLOR"
+  | "SELECT"
+  | "MULTI_SELECT"
+  | "IMAGE"
+  | "URL"
+  | "DATE"
+  | "LIST"
+  | "KEY_VALUE"
+  | "REFERENCE"
+  | "CODE";
 
 export interface ManifestField {
   key: string;
@@ -219,7 +212,7 @@ export interface ManifestField {
   type: ManifestFieldType;
   helpText: string | null;
   options: { value: string; label: string; hint?: string }[];
-  accept: 'image' | 'video' | 'audio' | 'document' | 'any' | null;
+  accept: "image" | "video" | "audio" | "document" | "any" | null;
   minItems: number | null;
   maxItems: number | null;
   itemFields: ManifestField[];
@@ -229,7 +222,7 @@ export interface ManifestSlot {
   key: string;
   label: string;
   maxChildren: number;
-  allowedComponents: string[] | '*';
+  allowedComponents: string[] | "*";
 }
 
 export interface ComponentManifest {
@@ -242,8 +235,10 @@ export interface ComponentManifest {
   modes: WorkspaceMode[];
   capabilities: string[];
   supportedSpans: number[];
-  /** Responsive column hint. Objects are the wire truth (`{mobile, tablet, desktop}`); flat numbers come from older clients. */
-  preferredSpan: { mobile: number; tablet: number; desktop: number } | number | null;
+  preferredSpan:
+    | { mobile: number; tablet: number; desktop: number }
+    | number
+    | null;
   defaultProps: Record<string, unknown>;
   fields: ManifestField[];
   dataBinding: { endpoints: string[]; bindableProps: string[] } | null;
@@ -252,19 +247,22 @@ export interface ComponentManifest {
   compatibility: { runtimeRange: string; schemaVersion: string };
 }
 
-/** The column span a manifest prefers on desktop, for badges and inspectors. */
 export function desktopSpan(
-  component: Pick<ComponentManifest, 'preferredSpan'> | null | undefined,
+  component: Pick<ComponentManifest, "preferredSpan"> | null | undefined,
 ): number | null {
   const span = component?.preferredSpan;
   if (span == null) return null;
-  return typeof span === 'object' ? (span.desktop ?? null) : span;
+  return typeof span === "object" ? (span.desktop ?? null) : span;
 }
+
+export type InjectedSurfaceType = "AUTH" | "PORTAL" | "PUBLIC_UTILITY";
 
 export interface PageDefinition {
   key: string;
   label: string;
+  surface?: InjectedSurfaceType;
   required: boolean;
+  defaultPath?: string;
 }
 
 export interface DataSourceDefinition {
@@ -278,6 +276,19 @@ export interface TemplateAccent {
   primary: string;
   secondary: string;
   surface: string;
+}
+
+export interface TemplateRuntimeMeta {
+  bundleUrl: string;
+  stylesUrl?: string | null;
+  manifestUrl?: string | null;
+  version: string;
+}
+
+export interface TemplateScreenshot {
+  title: string;
+  url: string;
+  pageKey?: string;
 }
 
 export interface BuiltinTemplateRef {
@@ -301,16 +312,17 @@ export interface StudioManifest {
   components: ComponentManifest[];
   dataSources: DataSourceDefinition[];
   defaultPageKey: string;
-  builtinTemplates: BuiltinTemplateRef[];
+  builtinTemplates?: BuiltinTemplateRef[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// READ MODELS
+// READ MODELS (DATABASE RUNTIME BINDING)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface WorkspaceDocument {
   projectId: string;
   templateId: string;
+  templateRuntime?: TemplateRuntimeMeta;
   globalTokens: GlobalTokens;
   pageLayouts: PageLayouts;
   seo: Record<string, PageSeoConfig>;
@@ -338,7 +350,7 @@ export interface SyncStatus {
 export interface RevisionSummary {
   id: string;
   revision: number;
-  kind: 'DRAFT' | 'PUBLISHED' | 'ROLLBACK';
+  kind: "DRAFT" | "PUBLISHED" | "ROLLBACK";
   actorId: string | null;
   actorRole: string | null;
   message: string | null;
@@ -352,7 +364,15 @@ export interface RevisionSummary {
   warningCount: number;
 }
 
-export interface RevisionDetail extends Omit<RevisionSummary, 'isLive' | 'isDraft' | 'operationCount' | 'operationKinds' | 'errorCount' | 'warningCount'> {
+export interface RevisionDetail extends Omit<
+  RevisionSummary,
+  | "isLive"
+  | "isDraft"
+  | "operationCount"
+  | "operationKinds"
+  | "errorCount"
+  | "warningCount"
+> {
   document: {
     pageLayouts: PageLayouts;
     globalTokens: GlobalTokens;
@@ -371,13 +391,6 @@ export interface HistoryPage {
   nextCursor: number | null;
 }
 
-/**
- * A template described without installing it.
- *
- * The setup wizard shows a slideshow before anything touches the draft, so the
- * gallery carries enough of a template's own data to render an honest preview:
- * its opening message, its palette, and the sections a visitor scrolls through.
- */
 export interface GalleryTemplatePreview {
   hero: {
     eyebrow?: string;
@@ -399,7 +412,6 @@ export interface GalleryTemplatePreview {
 }
 
 export interface GalleryTemplate {
-  /** Stable marketplace key — this, not an `id`, is what `/select` expects. */
   key: string;
   displayName: string;
   category: WorkspaceMode;
@@ -410,13 +422,18 @@ export interface GalleryTemplate {
   price?: number;
   rating?: number;
   isVerified?: boolean;
+  isOfficial?: boolean;
+  isDefault?: boolean;
   downloads?: number;
+  projectsUsing?: number;
   thumbnailUrl?: string | null;
+  coverImageUrl?: string | null;
+  screenshots?: TemplateScreenshot[];
+  runtime?: TemplateRuntimeMeta;
   previewUrl?: string | null;
-  source: 'BUILTIN' | 'MARKETPLACE';
+  source: "BUILTIN" | "MARKETPLACE";
   pageCount?: number;
   componentCount?: number;
-  /** Absent on a gallery served by a backend that predates the slideshow. */
   preview?: GalleryTemplatePreview;
 }
 
@@ -428,7 +445,7 @@ export interface GalleryResponse {
 }
 
 export interface Diagnostic {
-  severity: 'error' | 'warning' | 'info';
+  severity: "error" | "warning" | "info";
   path: string;
   message: string;
   code?: string;
@@ -446,7 +463,7 @@ export interface WriteResult {
 
 export interface PageDiff {
   pageKey: string;
-  status: 'added' | 'removed' | 'changed' | 'unchanged';
+  status: "added" | "removed" | "changed" | "unchanged";
   addedInstances: string[];
   removedInstances: string[];
   reordered: boolean;
@@ -465,7 +482,7 @@ export interface RevisionDiff {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// OPERATIONS
+// OPERATIONS PROTOCOL
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface Position {
@@ -475,38 +492,72 @@ export interface Position {
 }
 
 export type WorkspaceOperation =
-  | { op: 'node.insert'; pageKey: string; instance: LayoutInstance; position?: Position }
-  | { op: 'node.remove'; pageKey: string; instanceId: string }
-  | { op: 'node.move'; pageKey: string; instanceId: string; to: Position }
-  | { op: 'node.updateProps'; pageKey: string; instanceId: string; props: Record<string, unknown> }
-  | { op: 'node.replace'; pageKey: string; instanceId: string; instance: LayoutInstance }
-  | { op: 'node.setLayout'; pageKey: string; instanceId: string; layout: Record<string, unknown> }
-  | { op: 'node.setVisibility'; pageKey: string; instanceId: string; visible: boolean }
-  | { op: 'node.setBinding'; pageKey: string; instanceId: string; binding: DataBinding | null }
-  | { op: 'node.duplicate'; pageKey: string; instanceId: string; newInstanceId: string }
-  | { op: 'page.create'; pageKey: string; instances: LayoutInstance[] }
-  | { op: 'page.rename'; from: string; to: string }
-  | { op: 'page.delete'; pageKey: string }
-  | { op: 'page.reorder'; order: string[] }
-  | { op: 'token.update'; key: string; value: TokenValue }
-  | { op: 'token.remove'; key: string }
-  | { op: 'token.bulkUpdate'; tokens: GlobalTokens }
-  | { op: 'seo.update'; pageKey: string; seo: Record<string, unknown> }
-  | { op: 'i18n.update'; locale: string; strings: Record<string, string> }
-  | { op: 'i18n.remove'; locale: string }
-  | { op: 'document.meta'; componentRegistry?: Record<string, unknown>; message?: string };
+  | {
+      op: "node.insert";
+      pageKey: string;
+      instance: LayoutInstance;
+      position?: Position;
+    }
+  | { op: "node.remove"; pageKey: string; instanceId: string }
+  | { op: "node.move"; pageKey: string; instanceId: string; to: Position }
+  | {
+      op: "node.updateProps";
+      pageKey: string;
+      instanceId: string;
+      props: Record<string, unknown>;
+    }
+  | {
+      op: "node.replace";
+      pageKey: string;
+      instanceId: string;
+      instance: LayoutInstance;
+    }
+  | {
+      op: "node.setLayout";
+      pageKey: string;
+      instanceId: string;
+      layout: Record<string, unknown>;
+    }
+  | {
+      op: "node.setVisibility";
+      pageKey: string;
+      instanceId: string;
+      visible: boolean;
+    }
+  | {
+      op: "node.setBinding";
+      pageKey: string;
+      instanceId: string;
+      binding: DataBinding | null;
+    }
+  | {
+      op: "node.duplicate";
+      pageKey: string;
+      instanceId: string;
+      newInstanceId: string;
+    }
+  | { op: "page.create"; pageKey: string; instances: LayoutInstance[] }
+  | { op: "page.rename"; from: string; to: string }
+  | { op: "page.delete"; pageKey: string }
+  | { op: "page.reorder"; order: string[] }
+  | { op: "token.update"; key: string; value: TokenValue }
+  | { op: "token.remove"; key: string }
+  | { op: "token.bulkUpdate"; tokens: GlobalTokens }
+  | { op: "seo.update"; pageKey: string; seo: Record<string, unknown> }
+  | { op: "i18n.update"; locale: string; strings: Record<string, string> }
+  | { op: "i18n.remove"; locale: string }
+  | {
+      op: "document.meta";
+      componentRegistry?: Record<string, unknown>;
+      message?: string;
+    };
 
-export type OperationKind = WorkspaceOperation['op'];
+export type OperationKind = WorkspaceOperation["op"];
 
-/**
- * Operations whose inverse depends on prior state, so the Studio asks for
- * confirmation. Mirrors backend/src/workspace/registry/operations.ts's
- * DESTRUCTIVE_OPERATIONS.
- */
 export const DESTRUCTIVE_OPERATIONS: OperationKind[] = [
-  'node.remove',
-  'page.delete',
-  'token.remove',
+  "node.remove",
+  "page.delete",
+  "token.remove",
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
